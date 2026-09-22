@@ -1,0 +1,22 @@
+# Android / Gradle
+*.iml
+.gradle/
+.kotlin/
+build/
+app/build/
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+
+# Configuración local (SDK, claves)
+local.properties
+*.keystore
+*.jks
+
+# IDE
+.idea/
+*.hprof
+.DS_Store
+Thumbs.db
