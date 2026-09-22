@@ -26,7 +26,7 @@ class RolOrganizadorTest {
         val n = (MockRepository.usuarios.maxOf { it.id } + 1)
         val u = Usuario(
             id = n, nombre = "Prueba $n", correo = "rol$n@uv.mx", curp = "PRUE0000${n}HVZRRN0",
-            contrasena = "enzona123", roles = setOf(Rol.ASISTENTE), estado = EstadoUsuario.ACTIVO, correoVerificado = true,
+            contrasenaHash = "hash-de-prueba", roles = setOf(Rol.ASISTENTE), estado = EstadoUsuario.ACTIVO, correoVerificado = true,
         )
         MockRepository.usuarios += u
         return u

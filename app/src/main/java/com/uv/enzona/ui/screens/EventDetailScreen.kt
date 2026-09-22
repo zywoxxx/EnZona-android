@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
@@ -272,12 +275,25 @@ fun EventDetailScreen(
             if (evento.esDePago && tipos.isNotEmpty() && !cancelado && !realizado) {
                 Column(verticalArrangement = Arrangement.spacedBy(Espacio.s)) {
                     Text("Elige tu boleto", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-                    tipos.forEach { tipo ->
-                        FilaTipoBoleto(
-                            tipo = tipo,
-                            seleccionado = tipoSeleccionado?.id == tipo.id,
-                            habilitado = true,
-                            onClick = { tipoSeleccionadoId = tipo.id },
+                    // Los tipos se deslizan en horizontal: así caben varios sin alargar la pantalla
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(Espacio.s),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(end = Espacio.l),
+                    ) {
+                        items(tipos, key = { it.id }) { tipo ->
+                            TarjetaTipoBoleto(
+                                tipo = tipo,
+                                seleccionado = tipoSeleccionado?.id == tipo.id,
+                                habilitado = true,
+                                onClick = { tipoSeleccionadoId = tipo.id },
+                            )
+                        }
+                    }
+                    if (tipos.size > 1) {
+                        Text(
+                            "Desliza para ver los ${tipos.size} tipos de boleto.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
@@ -317,6 +333,49 @@ fun EventDetailScreen(
 // ==================================================================
 //  Piezas
 // ==================================================================
+
+/** Tarjeta de tipo de boleto para el carrusel horizontal (ancho fijo, alto igual entre tarjetas). */
+@Composable
+private fun TarjetaTipoBoleto(tipo: TipoBoleto, seleccionado: Boolean, habilitado: Boolean, onClick: () -> Unit) {
+    val agotado = tipo.cantidadDisponible <= 0
+    val activo = habilitado && !agotado
+    Surface(
+        modifier = Modifier
+            .width(168.dp)
+            .selectable(selected = seleccionado, enabled = activo, role = Role.RadioButton, onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
+        color = if (seleccionado) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            if (seleccionado) 1.5.dp else 1.dp,
+            if (seleccionado) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+        ),
+    ) {
+        Column(Modifier.padding(start = Espacio.xs, end = Espacio.m, top = Espacio.xs, bottom = Espacio.m)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RadioButton(selected = seleccionado, onClick = null, enabled = activo)
+                Text(
+                    tipo.nombre,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (activo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                Formato.precio(tipo.precio),
+                style = MaterialTheme.typography.titleMedium,
+                color = if (activo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = Espacio.m),
+            )
+            Text(
+                if (agotado) "Agotado" else "${tipo.cantidadDisponible} disponibles",
+                style = MaterialTheme.typography.bodySmall,
+                color = if (agotado) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(start = Espacio.m),
+            )
+        }
+    }
+}
 
 @Composable
 private fun FilaTipoBoleto(tipo: TipoBoleto, seleccionado: Boolean, habilitado: Boolean, onClick: () -> Unit) {
@@ -443,8 +502,10 @@ private fun DialogoConfirmarAsistencia(
 private fun PreviewTiposYBarra() {
     EnZonaTheme {
         Column(Modifier.padding(Espacio.l), verticalArrangement = Arrangement.spacedBy(Espacio.s)) {
-            FilaTipoBoleto(Fixtures.plantaBaja, seleccionado = true, habilitado = true, onClick = {})
-            FilaTipoBoleto(Fixtures.balcon, seleccionado = false, habilitado = true, onClick = {})
+            Row(horizontalArrangement = Arrangement.spacedBy(Espacio.s)) {
+                TarjetaTipoBoleto(Fixtures.plantaBaja, seleccionado = true, habilitado = true, onClick = {})
+                TarjetaTipoBoleto(Fixtures.balcon, seleccionado = false, habilitado = true, onClick = {})
+            }
             FilaTipoBoleto(Fixtures.agotado, seleccionado = false, habilitado = true, onClick = {})
             Spacer(Modifier.height(Espacio.l))
             BarraAccion(textoBoton = "Comprar 3 boletos", resumen = "$360.00 MXN · 3 boletos · total final", habilitado = true, onClick = {})

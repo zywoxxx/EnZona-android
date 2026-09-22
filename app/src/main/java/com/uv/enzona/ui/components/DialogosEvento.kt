@@ -139,7 +139,7 @@ private fun textoPolitica(p: PoliticaCancelacion, administrativa: Boolean): Stri
             "Se cancelará el evento, se anularán $confirmaciones y se reembolsarán ${Formato.importeMxn(p.reembolso.toDouble())} a los asistentes."
         administrativa -> "Se cancelará el evento y se anularán $confirmaciones."
         p.tipo == TipoCancelacion.DE_PAGO_CON_COMISION ->
-            "Se reembolsarán ${Formato.importeMxn(p.reembolso.toDouble())} a ${if (n == 1) "1 asistente" else "$n asistentes"}. " +
+            "Se reembolsarán ${Formato.importeMxn(p.reembolso.toDouble())} por ${if (n == 1) "1 boleto" else "$n boletos"} a sus asistentes. " +
                 "Se aplicará una comisión de cancelación del $PORCENTAJE_COMISION_CANCELACION % (${Formato.importeMxn(p.comision.toDouble())}) a tu cuenta."
         p.tipo == TipoCancelacion.BORRADOR -> "El evento está en borrador: se cancelará sin comisión."
         n == 0 -> "Se cancelará el evento. Todavía no hay confirmaciones que anular."

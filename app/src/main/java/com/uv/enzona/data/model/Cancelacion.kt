@@ -132,12 +132,3 @@ data class CargoOrganizador(
     val fecha: LocalDateTime,
     val pagado: Boolean = false,
 )
-
-/** Aviso a un asistente (en producción: correo/notificación del módulo de notificaciones). */
-data class NotificacionAsistente(
-    val id: Long,
-    val usuarioId: Long,
-    val eventoId: Long,
-    val texto: String,
-    val fecha: LocalDateTime,
-)

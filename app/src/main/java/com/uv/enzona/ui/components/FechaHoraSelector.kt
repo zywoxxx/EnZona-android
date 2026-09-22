@@ -1,13 +1,12 @@
 package com.uv.enzona.ui.components
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
@@ -28,6 +27,7 @@ import androidx.compose.material3.TimeInput
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,7 +60,14 @@ import java.time.ZoneOffset
  * nada por cuenta propia: se usa FechaEvento.
  */
 
-/** Campo de solo lectura que abre un selector al tocarlo (48 dp, con semántica de botón). */
+/**
+ * Campo de solo lectura que abre un selector al tocarlo (48 dp, con semántica de botón).
+ *
+ * El toque se detecta con el `interactionSource` del propio campo: un
+ * `OutlinedTextField` de solo lectura no dispara `onClick`, y una capa
+ * superpuesta con `fillMaxSize` dentro de un `Box` sin alto fijo mide 0 dp
+ * (ese era el motivo por el que el calendario no se abría).
+ */
 @Composable
 fun CampoSelector(
     valor: String,
@@ -74,43 +81,40 @@ fun CampoSelector(
     testTag: String = "",
 ) {
     val colores = MaterialTheme.colorScheme
+    val interaccion = remember { MutableInteractionSource() }
+    LaunchedEffect(interaccion, habilitado) {
+        interaccion.interactions.collect { if (habilitado && it is PressInteraction.Release) onClick() }
+    }
     Column(modifier.fillMaxWidth()) {
-        Box {
-            OutlinedTextField(
-                value = valor,
-                onValueChange = {},           // solo lectura: nunca se escribe a mano
-                readOnly = true,
-                enabled = habilitado,
-                label = { Text(etiqueta) },
-                leadingIcon = { Icon(icono, contentDescription = null) },
-                isError = error != null,
-                singleLine = true,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .testTag(testTag),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = colores.primary,
-                    unfocusedBorderColor = colores.outline,
-                    errorBorderColor = colores.error,
-                    unfocusedContainerColor = colores.surface,
-                    focusedContainerColor = colores.surface,
-                    disabledContainerColor = colores.surfaceContainerLow,
-                    focusedTextColor = colores.onSurface,
-                    unfocusedTextColor = colores.onSurface,
-                    disabledTextColor = colores.onSurfaceVariant,
-                    unfocusedLeadingIconColor = colores.onSurfaceVariant,
-                    focusedLeadingIconColor = colores.primary,
-                ),
-            )
-            // Capa que captura el toque: abre el selector y evita el teclado
-            Box(
-                Modifier
-                    .fillMaxSize()
-                    .clickable(enabled = habilitado, onClick = onClick)
-                    .semantics { role = Role.Button; contentDescription = "$etiqueta: ${valor.ifBlank { "sin elegir" }}. Abrir selector" },
-            )
-        }
+        OutlinedTextField(
+            value = valor,
+            onValueChange = {},           // solo lectura: nunca se escribe a mano
+            readOnly = true,
+            enabled = habilitado,
+            label = { Text(etiqueta) },
+            leadingIcon = { Icon(icono, contentDescription = null) },
+            isError = error != null,
+            singleLine = true,
+            shape = MaterialTheme.shapes.medium,
+            interactionSource = interaccion,
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(testTag)
+                .semantics { role = Role.Button; contentDescription = "$etiqueta: ${valor.ifBlank { "sin elegir" }}. Abrir selector" },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = colores.primary,
+                unfocusedBorderColor = colores.outline,
+                errorBorderColor = colores.error,
+                unfocusedContainerColor = colores.surface,
+                focusedContainerColor = colores.surface,
+                disabledContainerColor = colores.surfaceContainerLow,
+                focusedTextColor = colores.onSurface,
+                unfocusedTextColor = colores.onSurface,
+                disabledTextColor = colores.onSurfaceVariant,
+                unfocusedLeadingIconColor = colores.onSurfaceVariant,
+                focusedLeadingIconColor = colores.primary,
+            ),
+        )
         val pie = error ?: ayuda
         if (pie != null) {
             Text(

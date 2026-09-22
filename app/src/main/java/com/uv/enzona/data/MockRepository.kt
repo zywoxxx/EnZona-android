@@ -5,6 +5,9 @@ import androidx.compose.runtime.mutableStateOf
 import com.uv.enzona.data.model.Asiento
 import com.uv.enzona.data.model.Boleto
 import com.uv.enzona.data.model.CargoOrganizador
+import com.uv.enzona.data.model.Categoria
+import com.uv.enzona.data.model.TipoNotificacion
+import com.uv.enzona.data.model.UsuarioRol
 import com.uv.enzona.data.model.NotificacionAsistente
 import com.uv.enzona.data.model.PoliticaCancelacion
 import com.uv.enzona.data.model.ResultadoCancelacion
@@ -36,6 +39,7 @@ import com.uv.enzona.data.model.ValidacionAcceso
 import com.uv.enzona.util.FechaEvento
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
+import java.security.MessageDigest
 import java.time.LocalDateTime
 import java.util.Date
 import java.util.Locale
@@ -65,6 +69,16 @@ object MockRepository {
     private var siguienteValidacion = 1L
 
     // ------------------------------------------------------------------ tablas
+    /** Tabla `categoria`: catálogo fijo (nombre UNIQUE). */
+    val categorias: List<Categoria> = listOf(
+        Categoria(1, "Académico"), Categoria(2, "Música"), Categoria(3, "Tecnología"),
+        Categoria(4, "Teatro"), Categoria(5, "Deportes"), Categoria(6, "Cultural"),
+    )
+    fun categoriaId(nombre: String): Int? = categorias.firstOrNull { it.nombre.equals(nombre, true) }?.id
+
+    /** Vista de la tabla puente `usuario_rol` (una fila por usuario y rol). */
+    fun usuarioRoles(): List<UsuarioRol> = usuarios.flatMap { it.usuarioRoles }
+
     val usuarios = mutableStateListOf<Usuario>()
     val eventos = mutableStateListOf<Evento>()
     val tiposBoleto = mutableStateListOf<TipoBoleto>()
@@ -177,8 +191,9 @@ object MockRepository {
     private fun nuevoUsuario(nombre: String, correo: String, curp: String, roles: Set<Rol>): Usuario {
         val u = Usuario(
             id = siguienteUsuario++, nombre = nombre, correo = correo, curp = curp,
-            contrasena = "enzona123", roles = roles,
-            estado = EstadoUsuario.ACTIVO, correoVerificado = true
+            contrasenaHash = hashContrasena("enzona123"), roles = roles,
+            estado = EstadoUsuario.ACTIVO, correoVerificado = true, telefonoVerificado = false,
+            fechaRegistro = LocalDateTime.of(2026, 9, 1, 9, 0),
         )
         usuarios += u
         return u
@@ -192,6 +207,7 @@ object MockRepository {
         val e = Evento(
             id = siguienteEvento++, organizadorId = organizadorId, nombre = nombre,
             descripcion = descripcion, lugar = lugar, direccion = direccion, categoria = categoria,
+            categoriaId = categoriaId(categoria), fechaCreacion = LocalDateTime.of(2026, 9, 1, 10, 0),
             fecha = fecha, fechaFin = fin, esDePago = esDePago, precioDesde = precio,
             aforo = aforo, disponibles = aforo, colorSemilla = semilla,
             latitud = latitud, longitud = longitud,
@@ -223,8 +239,9 @@ object MockRepository {
     fun registrar(nombre: String, correo: String, telefono: String, curp: String, contrasena: String): Pair<Usuario, String> {
         val usuario = Usuario(
             id = siguienteUsuario++, nombre = nombre, correo = correo, telefono = telefono,
-            curp = curp.uppercase(), contrasena = contrasena,
-            roles = setOf(Rol.ASISTENTE), estado = EstadoUsuario.PENDIENTE
+            curp = curp.uppercase(), contrasenaHash = hashContrasena(contrasena),
+            roles = setOf(Rol.ASISTENTE), estado = EstadoUsuario.PENDIENTE,
+            fechaRegistro = FechaEvento.ahora(),
         )
         usuarios += usuario
         val otp = "%06d".format(Random.nextInt(0, 1_000_000))
@@ -253,7 +270,7 @@ object MockRepository {
             it.correo.equals(identificador, true) || it.curp.equals(identificador, true)
         } ?: return Result.failure(IllegalArgumentException("No existe una cuenta con ese correo o CURP."))
 
-        if (usuario.contrasena != contrasena) {
+        if (usuario.contrasenaHash != hashContrasena(contrasena)) {
             return Result.failure(IllegalArgumentException("La contraseña es incorrecta."))
         }
         return when (usuario.estado) {
@@ -299,6 +316,7 @@ object MockRepository {
         val evento = Evento(
             id = siguienteEvento++, organizadorId = organizadorId, nombre = nombre,
             descripcion = descripcion, lugar = lugar, direccion = direccion, categoria = categoria,
+            categoriaId = categoriaId(categoria), fechaCreacion = FechaEvento.ahora(),
             fecha = fecha, fechaFin = fechaFin, latitud = latitud, longitud = longitud, ciudad = ciudad,
             esDePago = esDePago, precioDesde = if (esDePago) precio else 0.0,
             aforo = aforo, disponibles = aforo,
@@ -343,11 +361,23 @@ object MockRepository {
         }
         val actualizado = actual.copy(
             nombre = nombre, descripcion = descripcion, lugar = lugar, direccion = direccion,
-            categoria = categoria, fecha = fecha, fechaFin = fechaFin, aforo = aforoFinal,
+            categoria = categoria, categoriaId = categoriaId(categoria), fecha = fecha, fechaFin = fechaFin, aforo = aforoFinal,
             disponibles = aforoFinal - actual.vendidos,
             latitud = latitud, longitud = longitud,
         )
         eventos[i] = actualizado
+        // RF-13: si cambia la fecha, aviso a cada asistente con boleto vigente
+        if (fecha != actual.fecha) {
+            boletosDeEvento(eventoId).filter { it.estado == EstadoBoleto.VALIDO }
+                .groupBy { it.asistenteId }
+                .forEach { (usuarioId, suyos) ->
+                    notificar(
+                        usuarioId, eventoId, TipoNotificacion.FECHA_CAMBIADA,
+                        "«${actual.nombre}» cambió de fecha: ahora es el ${FechaEvento.largo(fecha)}. Tus boletos siguen siendo válidos.",
+                        boletoId = suyos.first().id,
+                    )
+                }
+        }
         return Result.success(actualizado)
     }
 
@@ -459,11 +489,12 @@ object MockRepository {
             )
         }
         asistentes.forEach { usuarioId ->
-            notificaciones += NotificacionAsistente(
-                id = siguienteNotificacion++, usuarioId = usuarioId, eventoId = eventoId, fecha = ahora,
-                texto = if (politica.reembolso.signum() > 0)
+            notificar(
+                usuarioId, eventoId, TipoNotificacion.EVENTO_CANCELADO,
+                if (politica.reembolso.signum() > 0)
                     "El evento «${evento.nombre}» fue cancelado. Recibirás el reembolso completo de tu compra."
                 else "El evento «${evento.nombre}» fue cancelado. Tu confirmación quedó anulada.",
+                fecha = ahora,
             )
         }
         return Result.success(
@@ -769,6 +800,13 @@ object MockRepository {
 
         val resultado = CompraRealizada(orden = ordenes[ip], pago = pago, boletos = emitidos)
         if (solicitud.claveOperacion.isNotBlank()) operacionesAplicadas[solicitud.claveOperacion] = resultado
+        notificar(
+            usuarioId, evento.id, TipoNotificacion.COMPRA_CONFIRMADA,
+            (if (total > 0) "Compraste ${if (cantidad == 1) "1 boleto" else "$cantidad boletos"} para «${evento.nombre}»"
+            else "Confirmaste tu lugar en «${evento.nombre}»") +
+                " · ${FechaEvento.corto(evento.fecha)}. ${if (cantidad == 1) "Tu QR está" else "Tus QR están"} en Mis boletos.",
+            boletoId = emitidos.first().id,
+        )
         return Result.success(resultado)
     }
 
@@ -870,13 +908,13 @@ object MockRepository {
     fun cambiarContrasena(usuarioId: Long, actual: String, nueva: String): Result<Unit> {
         val i = usuarios.indexOfFirst { it.id == usuarioId }
         if (i < 0) return Result.failure(IllegalArgumentException("La cuenta no existe."))
-        if (usuarios[i].contrasena != actual) {
+        if (usuarios[i].contrasenaHash != hashContrasena(actual)) {
             return Result.failure(IllegalArgumentException("La contraseña actual no es correcta."))
         }
         if (!com.uv.enzona.util.Validaciones.contrasenaValida(nueva)) {
             return Result.failure(IllegalArgumentException("La nueva contraseña debe tener al menos 8 caracteres, con letras y números."))
         }
-        usuarios[i] = usuarios[i].copy(contrasena = nueva)
+        usuarios[i] = usuarios[i].copy(contrasenaHash = hashContrasena(nueva))
         return Result.success(Unit)
     }
 
@@ -902,6 +940,7 @@ object MockRepository {
             return registrar(codigo, "—", validadorId, false,
                 "Boleto no encontrado", "El código no corresponde a ningún boleto emitido.")
         }
+        ultimoBoletoEscaneado = boletos[idx].id
         val detalle = detalleDe(boletos[idx])
         val nombreEvento = detalle?.evento?.nombre ?: "—"
         val asiento = detalle?.asiento?.etiquetaLarga
@@ -930,13 +969,19 @@ object MockRepository {
         }
     }
 
+    /** Boleto resuelto en el escaneo en curso (FK `boleto_id` de la bitácora). */
+    private var ultimoBoletoEscaneado: Long? = null
+
     private fun registrar(
         codigo: String, eventoNombre: String, validadorId: Long,
         permitido: Boolean, titulo: String, detalle: String, asiento: String? = null,
     ): ResultadoValidacion {
         val offline = modoOffline.value
+        val boletoId = ultimoBoletoEscaneado
+        ultimoBoletoEscaneado = null
         validaciones += ValidacionAcceso(
             id = siguienteValidacion++,
+            boletoId = boletoId,
             codigoBoleto = codigo,
             eventoNombre = eventoNombre,
             validadorId = validadorId,
@@ -1059,4 +1104,85 @@ object MockRepository {
 
     private fun ahoraTexto(): String =
         SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault()).format(Date())
+
+    /**
+     * Hash de la contraseña para la columna `contrasena_hash`. En la demo es
+     * SHA-256; en producción el servidor usa BCrypt con sal (RNF-01) y el
+     * cliente nunca calcula ni compara hashes.
+     */
+    private fun hashContrasena(contrasena: String): String =
+        MessageDigest.getInstance("SHA-256").digest(contrasena.toByteArray()).joinToString("") { "%02x".format(it) }
+
+    // ==================================================================
+    //  Notificaciones del asistente (v4)
+    // ==================================================================
+
+    /** Días de anticipación con los que se genera el recordatorio de un evento. */
+    const val DIAS_RECORDATORIO = 7L
+
+    private fun notificar(
+        usuarioId: Long, eventoId: Long, tipo: TipoNotificacion, texto: String,
+        fecha: LocalDateTime = FechaEvento.ahora(), boletoId: Long? = null,
+    ) {
+        notificaciones += NotificacionAsistente(
+            id = siguienteNotificacion++, usuarioId = usuarioId, eventoId = eventoId,
+            tipo = tipo, texto = texto, fecha = fecha, boletoId = boletoId,
+        )
+    }
+
+    /**
+     * Genera (una sola vez por evento) el recordatorio de los eventos con boleto
+     * vigente que ocurren dentro de los próximos `DIAS_RECORDATORIO` días.
+     * En producción lo hace un proceso programado del backend.
+     * @return cuántos recordatorios nuevos se crearon.
+     */
+    fun generarRecordatorios(usuarioId: Long, ahora: LocalDateTime = FechaEvento.ahora()): Int {
+        val limite = ahora.plusDays(DIAS_RECORDATORIO)
+        var creados = 0
+        boletosDe(usuarioId)
+            .filter { it.estado == EstadoBoleto.VALIDO && it.evento.estado == EstadoEvento.PUBLICADO }
+            .filter { it.evento.fecha.isAfter(ahora) && !it.evento.fecha.isAfter(limite) }
+            .groupBy { it.evento.id }
+            .forEach { (eventoId, suyos) ->
+                val yaExiste = notificaciones.any { it.usuarioId == usuarioId && it.eventoId == eventoId && it.tipo == TipoNotificacion.RECORDATORIO }
+                if (!yaExiste) {
+                    val evento = suyos.first().evento
+                    val dias = java.time.Duration.between(ahora, evento.fecha).toDays()
+                    val cuando = when {
+                        dias <= 0 -> "es hoy"
+                        dias == 1L -> "es mañana"
+                        else -> "es en $dias días"
+                    }
+                    notificar(
+                        usuarioId, eventoId, TipoNotificacion.RECORDATORIO,
+                        "«${evento.nombre}» $cuando · ${FechaEvento.largo(evento.fecha)} en ${evento.lugar}. " +
+                            (if (suyos.size == 1) "Lleva tu QR listo." else "Tienes ${suyos.size} boletos; lleva los QR listos."),
+                        fecha = ahora, boletoId = suyos.first().id,
+                    )
+                    creados++
+                }
+            }
+        return creados
+    }
+
+    /** Notificaciones del usuario, más recientes primero (genera antes los recordatorios pendientes). */
+    fun notificacionesDe(usuarioId: Long, ahora: LocalDateTime = FechaEvento.ahora()): List<NotificacionAsistente> {
+        generarRecordatorios(usuarioId, ahora)
+        return notificaciones.filter { it.usuarioId == usuarioId }.sortedByDescending { it.fecha }
+    }
+
+    fun notificacionesNoLeidas(usuarioId: Long): Int = notificaciones.count { it.usuarioId == usuarioId && !it.leida }
+
+    fun marcarNotificacionLeida(id: Long) {
+        val i = notificaciones.indexOfFirst { it.id == id }
+        if (i >= 0 && !notificaciones[i].leida) notificaciones[i] = notificaciones[i].copy(leida = true)
+    }
+
+    fun marcarNotificacionesLeidas(usuarioId: Long) {
+        notificaciones.indices.forEach { i ->
+            if (notificaciones[i].usuarioId == usuarioId && !notificaciones[i].leida) {
+                notificaciones[i] = notificaciones[i].copy(leida = true)
+            }
+        }
+    }
 }

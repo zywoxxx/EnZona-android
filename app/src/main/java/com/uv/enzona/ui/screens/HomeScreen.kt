@@ -22,6 +22,8 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SearchOff
@@ -93,7 +95,7 @@ private val filtrosSaver = Saver<FiltrosEventos, List<String>>(
 )
 
 @Composable
-fun HomeScreen(onEventoClick: (Long) -> Unit) {
+fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {}) {
     var filtros by rememberSaveable(stateSaver = filtrosSaver) { mutableStateOf(FiltrosEventos()) }
     var cambiandoZona by rememberSaveable { mutableStateOf(false) }
     val estadoLista = rememberLazyListState()
@@ -106,6 +108,12 @@ fun HomeScreen(onEventoClick: (Long) -> Unit) {
     val categorias = publicados.map { it.categoria }.distinct().sorted()
     val lugares = publicados.map { it.lugar }.distinct().sorted()
     val eventos = filtros.aplicar(publicados)
+    // La campana muestra cuántas notificaciones hay sin leer (recordatorios, cancelaciones, compras)
+    val usuarioId = com.uv.enzona.data.SessionManager.usuarioId
+    val noLeidas = remember(MockRepository.notificaciones.size, MockRepository.notificaciones.toList()) {
+        MockRepository.generarRecordatorios(usuarioId)
+        MockRepository.notificacionesNoLeidas(usuarioId)
+    }
 
     if (cambiandoZona) {
         DialogoZona(
@@ -125,7 +133,7 @@ fun HomeScreen(onEventoClick: (Long) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(Espacio.m),
     ) {
         item(key = "encabezado") {
-            Encabezado(zona = zona, onCambiarZona = { cambiandoZona = true })
+            Encabezado(zona = zona, onCambiarZona = { cambiandoZona = true }, noLeidas = noLeidas, onNotificaciones = onNotificaciones)
         }
         item(key = "busqueda") {
             CampoBusqueda(
@@ -178,15 +186,20 @@ fun HomeScreen(onEventoClick: (Long) -> Unit) {
 // ==================================================================
 
 @Composable
-private fun Encabezado(zona: String, onCambiarZona: () -> Unit) {
+private fun Encabezado(zona: String, onCambiarZona: () -> Unit, noLeidas: Int = 0, onNotificaciones: () -> Unit = {}) {
     Column {
-        androidx.compose.foundation.Image(
-            painter = androidx.compose.ui.res.painterResource(com.uv.enzona.R.drawable.enzona_logo),
-            contentDescription = "EnZona",
-            modifier = Modifier.height(40.dp),
-            contentScale = androidx.compose.ui.layout.ContentScale.Fit,
-            alignment = Alignment.CenterStart,
-        )
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            androidx.compose.foundation.Image(
+                painter = androidx.compose.ui.res.painterResource(com.uv.enzona.R.drawable.enzona_logo),
+                contentDescription = "EnZona",
+                modifier = Modifier
+                    .height(40.dp)
+                    .weight(1f),
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                alignment = Alignment.CenterStart,
+            )
+            BotonNotificaciones(noLeidas = noLeidas, onClick = onNotificaciones)
+        }
         Spacer(Modifier.height(Espacio.xs))
         Text(
             "Eventos cerca de ti",
@@ -207,6 +220,34 @@ private fun Encabezado(zona: String, onCambiarZona: () -> Unit) {
             )
             Text(zona, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyLarge)
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
+}
+
+/** Campana con contador de notificaciones sin leer (48 dp de área de toque). */
+@Composable
+fun BotonNotificaciones(noLeidas: Int, onClick: () -> Unit) {
+    val descripcion = when (noLeidas) {
+        0 -> "Notificaciones. Ninguna sin leer"
+        1 -> "Notificaciones. 1 sin leer"
+        else -> "Notificaciones. $noLeidas sin leer"
+    }
+    IconButton(onClick = onClick, modifier = Modifier.semantics { contentDescription = descripcion }) {
+        androidx.compose.material3.BadgedBox(
+            badge = {
+                if (noLeidas > 0) {
+                    androidx.compose.material3.Badge(
+                        containerColor = MaterialTheme.colorScheme.tertiary,
+                        contentColor = MaterialTheme.colorScheme.onTertiary,
+                    ) { Text(if (noLeidas > 9) "9+" else noLeidas.toString()) }
+                }
+            },
+        ) {
+            Icon(
+                if (noLeidas > 0) Icons.Filled.NotificationsActive else Icons.Filled.Notifications,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface,
+            )
         }
     }
 }
@@ -327,12 +368,22 @@ private fun FilaFiltros(
     onCambio: (FiltrosEventos) -> Unit,
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(Espacio.s)) {
+        // Gratis y De pago van juntos: son las dos opciones del mismo filtro (precio)
         item {
             ChipFiltro(
                 texto = "Gratis",
                 activo = filtros.precio == FiltroPrecio.GRATIS,
                 onClick = {
                     onCambio(filtros.copy(precio = if (filtros.precio == FiltroPrecio.GRATIS) FiltroPrecio.TODOS else FiltroPrecio.GRATIS))
+                },
+            )
+        }
+        item {
+            ChipFiltro(
+                texto = "De pago",
+                activo = filtros.precio == FiltroPrecio.DE_PAGO,
+                onClick = {
+                    onCambio(filtros.copy(precio = if (filtros.precio == FiltroPrecio.DE_PAGO) FiltroPrecio.TODOS else FiltroPrecio.DE_PAGO))
                 },
             )
         }
@@ -358,15 +409,6 @@ private fun FilaFiltros(
                 valor = filtros.categoria,
                 opciones = listOf("Todos los tipos") + categorias,
                 onElegir = { elegido -> onCambio(filtros.copy(categoria = elegido.takeIf { it != "Todos los tipos" })) },
-            )
-        }
-        item {
-            ChipFiltro(
-                texto = "De pago",
-                activo = filtros.precio == FiltroPrecio.DE_PAGO,
-                onClick = {
-                    onCambio(filtros.copy(precio = if (filtros.precio == FiltroPrecio.DE_PAGO) FiltroPrecio.TODOS else FiltroPrecio.DE_PAGO))
-                },
             )
         }
     }

@@ -13,7 +13,19 @@ import java.time.LocalDateTime
  *   boleto ─ tipo_boleto,  boleto ─ asiento,  boleto ─< validacion_acceso
  */
 
-enum class Rol { ASISTENTE, ORGANIZADOR, VALIDADOR, ADMIN }
+/** Tabla `rol` (id, nombre UNIQUE). El `id` es el que viaja en `usuario_rol.rol_id`. */
+enum class Rol(val id: Int) {
+    ASISTENTE(1), ORGANIZADOR(2), VALIDADOR(3), ADMIN(4);
+
+    /** `rol.nombre` tal como está en la base. */
+    val nombreBd: String get() = name
+}
+
+/** Fila de la tabla puente `usuario_rol` (PK compuesta usuario_id + rol_id). */
+data class UsuarioRol(val usuarioId: Long, val rolId: Int)
+
+/** Tabla `categoria` (id, nombre UNIQUE). Catálogo fijo en `MockRepository.categorias`. */
+data class Categoria(val id: Int, val nombre: String)
 
 enum class EstadoUsuario { PENDIENTE, ACTIVO, BLOQUEADO }
 
@@ -37,12 +49,19 @@ data class Usuario(
     val correo: String,
     val telefono: String = "",
     val curp: String,
-    val contrasena: String,           // en producción: hash BCrypt en el servidor (RNF-01)
+    /** Columna `contrasena_hash`: nunca se guarda la contraseña en claro (RNF-01). En producción, BCrypt en el servidor. */
+    val contrasenaHash: String,
+    /** Filas de `usuario_rol` resueltas contra el catálogo `rol`. */
     val roles: Set<Rol> = setOf(Rol.ASISTENTE),
     val estado: EstadoUsuario = EstadoUsuario.PENDIENTE,
     val correoVerificado: Boolean = false,
+    val telefonoVerificado: Boolean = false,
+    val fechaRegistro: LocalDateTime = LocalDateTime.now(),
 ) {
     val esPersonal: Boolean get() = roles.any { it != Rol.ASISTENTE }
+
+    /** Vista de las filas de `usuario_rol` de esta cuenta. */
+    val usuarioRoles: List<UsuarioRol> get() = roles.map { UsuarioRol(id, it.id) }
 
     /** Rol con el que se decide la pantalla principal tras iniciar sesión. */
     val rolPrincipal: Rol
@@ -63,6 +82,7 @@ data class Evento(
     val descripcion: String,
     val lugar: String,
     val direccion: String,
+    /** Nombre de la categoría (JOIN con `categoria`); `categoriaId` es la FK `categoria_id`. */
     val categoria: String,
     val fecha: LocalDateTime,        // fecha_hora_inicio (zona America/Mexico_City); ver util/FechaEvento
     val fechaFin: LocalDateTime? = null,   // fecha_hora_fin, opcional; nunca anterior al inicio
@@ -72,6 +92,8 @@ data class Evento(
     val disponibles: Int,
     val requiereAsiento: Boolean = false,   // columna requiere_asiento
     val estado: EstadoEvento = EstadoEvento.PUBLICADO,
+    val categoriaId: Int? = null,          // FK categoria_id (ON DELETE SET NULL)
+    val fechaCreacion: LocalDateTime = LocalDateTime.now(),   // columna fecha_creacion
     val colorSemilla: Int = 0,
     // v2 (esquema_enzona_v2.sql): ciudad del evento y coordenadas opcionales.
     // latitud y longitud pueden faltar juntas; nunca se sustituyen por 0.
@@ -217,6 +239,8 @@ data class MetodoPago(
 /** Bitácora de accesos; soporta registros hechos sin conexión (RNF-08). */
 data class ValidacionAcceso(
     val id: Long,
+    /** FK `boleto_id`; null cuando el código escaneado no corresponde a ningún boleto (solo bitácora local). */
+    val boletoId: Long?,
     val codigoBoleto: String,
     val eventoNombre: String,
     val validadorId: Long,

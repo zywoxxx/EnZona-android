@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CalendarMonth
@@ -116,10 +117,57 @@ fun OrderSummaryScreen(
                     )
                 }
             }
-            itemsIndexed(boletos, key = { _, b -> b.id }) { indice, boleto ->
-                FilaBoletoDeOrden(boleto = boleto, posicion = indice + 1, total = n, onClick = { onVerBoleto(boleto.id) })
+            item {
+                Text(
+                    if (n == 1) "Tu boleto" else "Tus boletos · desliza para verlos",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onBackground,
+                )
+            }
+            item {
+                // Carrusel horizontal: los N boletos se recorren deslizando, sin alargar la pantalla
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(Espacio.m), contentPadding = PaddingValues(end = Espacio.l)) {
+                    itemsIndexed(boletos, key = { _, b -> b.id }) { indice, boleto ->
+                        TarjetaBoletoDeOrden(boleto = boleto, posicion = indice + 1, total = n, onClick = { onVerBoleto(boleto.id) })
+                    }
+                }
             }
         }
+    }
+}
+
+/** Tarjeta de un boleto en el carrusel de la orden (ancho fijo, todas del mismo alto). */
+@Composable
+private fun TarjetaBoletoDeOrden(boleto: BoletoDetalle, posicion: Int, total: Int, onClick: () -> Unit) {
+    TarjetaEnZona(onClick = onClick, relleno = PaddingValues(Espacio.m), modifier = Modifier.width(220.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(
+                Icons.Filled.QrCode2, contentDescription = null,
+                tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(36.dp)
+            )
+            Spacer(Modifier.width(Espacio.s))
+            Text(
+                "Boleto $posicion de $total",
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(Modifier.height(Espacio.s))
+        Text(
+            listOfNotNull(boleto.nombreTipo, boleto.etiquetaAsiento).joinToString(" · "),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            minLines = 2,
+            maxLines = 2,
+        )
+        Text(
+            boleto.codigo,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Spacer(Modifier.height(Espacio.s))
+        EtiquetaEstadoBoleto(boleto.estado)
     }
 }
 
@@ -159,8 +207,11 @@ private fun FilaBoletoDeOrden(boleto: BoletoDetalle, posicion: Int, total: Int, 
 private fun PreviewFilaOrden() {
     EnZonaTheme {
         Column(Modifier.padding(Espacio.l), verticalArrangement = Arrangement.spacedBy(Espacio.m)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(Espacio.m)) {
+                TarjetaBoletoDeOrden(Fixtures.boletoValido, 1, 3) {}
+                TarjetaBoletoDeOrden(Fixtures.boletoUsado, 2, 3) {}
+            }
             FilaBoletoDeOrden(Fixtures.boletoValido, 1, 3) {}
-            FilaBoletoDeOrden(Fixtures.boletoUsado, 2, 3) {}
         }
     }
 }

@@ -3,6 +3,23 @@
 App móvil de EnZona con los cuatro actores del diagrama de casos de uso:
 **asistente**, **organizador**, **validador** y **administrador**.
 
+## v4 · Modelo relacional, notificaciones y ajustes de interfaz (22 de septiembre de 2026)
+
+- **Modelo alineado al diagrama ER**: `Rol` con `id` (tabla `rol`), vista `usuario_rol`,
+  catálogo `Categoria` y `evento.categoria_id`, `usuario.contrasena_hash` (nunca la
+  contraseña en claro), `telefono_verificado`, `fecha_registro`, `evento.fecha_creacion`
+  y `validacion_acceso.boleto_id`. Pruebas `ModeloRelacionalTest` (CP-MODELO-01..05).
+- **Notificaciones** (campana en Inicio con contador): recordatorio de eventos próximos
+  con boleto, evento cancelado, compra confirmada y cambio de fecha. Pantalla con pestañas
+  Todas / Próximos / Cancelados / Compras. Pruebas `NotificacionesTest` (CP-NOTIF-01..05).
+- **Calendario**: corregido el campo de fecha que no abría el selector.
+- **Inicio**: los filtros «Gratis» y «De pago» van juntos.
+- **Boletos en horizontal**: los tipos de boleto del detalle y los N boletos de la orden se
+  deslizan en un carrusel.
+
+Nota técnica `docs/notas_v4_modelo_notificaciones.md`; migración
+`docs/migracion_v4_incremental.sql` (no ejecutada); capturas en `docs/capturas_v4/`.
+
 ## v3 · Cancelación con regla de negocio, rol de organizador, mapa y fecha/hora (17 de septiembre de 2026)
 
 - **Cancelar evento (RF-14).** Solo antes del inicio. Gratuito: se anulan las confirmaciones y
@@ -241,9 +258,11 @@ El perfil está organizado como pantalla de ajustes, con tres bloques:
 
 ## Fidelidad al modelo relacional
 
-Las clases de `data/model/Models.kt` reproducen las tablas de
-`esquema_enzona.sql`: `usuario`, `rol`, `evento`, `categoria`, `tipo_boleto`,
-`asiento`, `orden`, `pago`, `boleto` y `validacion_acceso`.
+Las clases de `data/model/Models.kt` reproducen las tablas del diagrama ER
+(`esquema_enzona_v2.sql`): `usuario` (con `contrasena_hash`, `telefono_verificado`,
+`fecha_registro`), `rol` (enum con `id`), `usuario_rol` (vista `usuarioRoles()`),
+`categoria` (catálogo `MockRepository.categorias`, FK `evento.categoriaId`), `evento`,
+`tipo_boleto`, `asiento`, `orden`, `pago`, `boleto` y `validacion_acceso` (FK `boletoId`).
 
 Una compra crea la cadena completa **orden → pago → boleto**, y el boleto
 referencia `tipo_boleto_id` y `asiento_id` como en el esquema. Las pantallas

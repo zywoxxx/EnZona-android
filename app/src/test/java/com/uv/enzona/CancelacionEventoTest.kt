@@ -129,7 +129,7 @@ class CancelacionEventoTest {
         assertEquals(3, r.asistentesNotificados)
         assertEquals(EstadoEvento.CANCELADO, MockRepository.obtenerEvento(e.id)!!.estado)
         assertTrue(MockRepository.boletosDeEvento(e.id).all { it.estado == EstadoBoleto.CANCELADO })
-        assertEquals(3, MockRepository.notificaciones.count { it.eventoId == e.id })
+        assertEquals(3, MockRepository.notificaciones.count { it.eventoId == e.id && it.tipo == com.uv.enzona.data.model.TipoNotificacion.EVENTO_CANCELADO })
         assertEquals(0.0, MockRepository.obtenerEvento(e.id)!!.comisionCancelacion, 0.0)
     }
 

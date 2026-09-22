@@ -49,7 +49,8 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 
-private val CATEGORIAS = listOf("Académico", "Música", "Tecnología", "Teatro", "Deportes", "Cultural")
+/** Nombres del catálogo `categoria` (tabla con id y nombre UNIQUE). */
+private val CATEGORIAS: List<String> get() = MockRepository.categorias.map { it.nombre }
 
 /**
  * Alta y edición de eventos (v3).

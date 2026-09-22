@@ -54,7 +54,7 @@ class DialogosTest {
                 )
             }
         }
-        regla.onNodeWithText("Se reembolsarán \$1,500.00 MXN a 3 asistentes. Se aplicará una comisión de cancelación del 10 % (\$150.00 MXN) a tu cuenta.").assertIsDisplayed()
+        regla.onNodeWithText("Se reembolsarán \$1,500.00 MXN por 3 boletos a sus asistentes. Se aplicará una comisión de cancelación del 10 % (\$150.00 MXN) a tu cuenta.").assertIsDisplayed()
         regla.onNodeWithText("Comisión de cancelación: \$150.00 MXN").assertIsDisplayed()
         regla.onNodeWithTag("boton_confirmar_cancelacion").assertIsEnabled()
         regla.onNodeWithText("Cancelar y aceptar comisión").assertIsDisplayed().performClick()

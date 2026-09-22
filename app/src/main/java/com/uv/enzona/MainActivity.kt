@@ -33,6 +33,7 @@ import com.uv.enzona.data.model.Rol
 import com.uv.enzona.ui.screens.CheckoutScreen
 import com.uv.enzona.ui.screens.EventDetailScreen
 import com.uv.enzona.ui.screens.HomeScreen
+import com.uv.enzona.ui.screens.NotificacionesScreen
 import com.uv.enzona.ui.screens.OrderSummaryScreen
 import com.uv.enzona.ui.screens.ajustes.EditProfileScreen
 import com.uv.enzona.ui.screens.ajustes.HelpScreen
@@ -71,6 +72,7 @@ object Rutas {
     const val ORDEN = "orden/{id}"
     const val BOLETOS = "boletos"
     const val BOLETO = "boleto/{id}"
+    const val NOTIFICACIONES = "notificaciones"
 
     // Ajustes de la cuenta
     const val EDITAR_PERFIL = "editar_perfil"
@@ -198,7 +200,17 @@ fun AppEnZona() {
 
             // ---------------- Asistente ----------------
             composable(Rutas.HOME) {
-                HomeScreen(onEventoClick = { id -> navController.navigate(Rutas.evento(id)) })
+                HomeScreen(
+                    onEventoClick = { id -> navController.navigate(Rutas.evento(id)) },
+                    onNotificaciones = { navController.navigate(Rutas.NOTIFICACIONES) },
+                )
+            }
+            composable(Rutas.NOTIFICACIONES) {
+                NotificacionesScreen(
+                    onVolver = { navController.popBackStack() },
+                    onAbrirBoleto = { id -> navController.navigate(Rutas.boleto(id)) },
+                    onAbrirEvento = { id -> navController.navigate(Rutas.evento(id)) },
+                )
             }
             composable(Rutas.EVENTO) { entrada ->
                 val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable

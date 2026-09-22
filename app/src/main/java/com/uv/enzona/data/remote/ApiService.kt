@@ -8,6 +8,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
+import retrofit2.http.Query
 
 /**
  * Contrato de la API REST del backend Spring Boot (aún no conectado; el
@@ -81,7 +82,35 @@ interface ApiService {
     /** Quita el rol ORGANIZADOR. 409 si tiene eventos publicados con boletos vigentes o es su único rol. */
     @DELETE("api/usuarios/me/roles/organizador")
     suspend fun dejarDeSerOrganizador(): UsuarioDto
+
+    // ---------------- v4: notificaciones del asistente (PENDIENTE en backend) ----------------
+
+    /**
+     * Notificaciones de la cuenta autenticada, más recientes primero. El backend
+     * genera los RECORDATORIO con un job diario (ver docs/migracion_v4_incremental.sql);
+     * la app no los calcula cuando hay backend.
+     */
+    @GET("api/usuarios/me/notificaciones")
+    suspend fun notificaciones(@Query("soloNoLeidas") soloNoLeidas: Boolean = false): List<NotificacionDto>
+
+    /** Marca como leída una notificación (404 si no es de la cuenta). */
+    @POST("api/usuarios/me/notificaciones/{id}/leida")
+    suspend fun marcarLeida(@Path("id") id: Long): NotificacionDto
+
+    /** Marca todas como leídas. Devuelve cuántas cambiaron. */
+    @POST("api/usuarios/me/notificaciones/leidas")
+    suspend fun marcarTodasLeidas(): Int
 }
+
+data class NotificacionDto(
+    val id: Long,
+    val tipo: String,                // COMPRA_CONFIRMADA | RECORDATORIO | EVENTO_CANCELADO | FECHA_CAMBIADA
+    val texto: String,
+    val fecha: String,               // ISO-8601 con zona
+    val leida: Boolean,
+    val eventoId: Long?,
+    val boletoId: Long?,
+)
 
 data class PoliticaCancelacionDto(
     val permitida: Boolean,
