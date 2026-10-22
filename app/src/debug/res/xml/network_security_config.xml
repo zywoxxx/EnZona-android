@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Compilación debug: se permite HTTP en claro para hablar con el backend que corre
+  en la PC de desarrollo (10.0.2.2 desde el emulador, o la IP de la red local desde
+  un teléfono). Este archivo sustituye al de `main` solo en debug; release exige HTTPS.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true" />
+</network-security-config>

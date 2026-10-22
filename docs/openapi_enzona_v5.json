@@ -1,0 +1,3451 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "EnZona API",
+    "description": "API REST de EnZona: descubrimiento y gestión de eventos locales con boletos electrónicos validados por código QR. La consumen la app Android y la web React.\n\nSimulaciones vigentes (no hay proveedor contratado): la pasarela de pago, el envío de correo y el envío del código de verificación (OTP). Ninguna mueve dinero ni envía mensajes reales.\n\nErrores: `application/problem+json` (RFC 7807) con `status`, `title`, `detail` y `codigo`. 400 validación · 401 sin sesión · 403 sin permiso · 404 no existe · 409 conflicto de inventario o de estado · 422 regla de negocio.\n\nFechas: ISO-8601 con zona; el servidor trabaja en UTC y los clientes muestran America/Mexico_City. Importes: texto decimal exacto en MXN.",
+    "contact": {
+      "name": "Equipo EnZona · Universidad Veracruzana"
+    },
+    "version": "v5"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8080",
+      "description": "Desarrollo local"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Órdenes y pagos",
+      "description": "Compra de N boletos, pagos (pasarela SIMULADA) y métodos de pago guardados"
+    },
+    {
+      "name": "Boletos",
+      "description": "Boletos electrónicos con su código QR firmado"
+    },
+    {
+      "name": "Notificaciones",
+      "description": "Avisos de la cuenta: compras, recordatorios, cancelaciones y cambios de fecha"
+    },
+    {
+      "name": "Usuarios",
+      "description": "Perfil, contraseña y roles de la cuenta autenticada"
+    },
+    {
+      "name": "Acceso",
+      "description": "Registro, verificación por código de un solo uso e inicio de sesión"
+    },
+    {
+      "name": "Administración",
+      "description": "Gestión de usuarios, roles, categorías y supervisión de eventos"
+    },
+    {
+      "name": "Eventos",
+      "description": "Catálogo, ciclo de vida del evento, asientos, personal de acceso y cancelación"
+    },
+    {
+      "name": "Validación de acceso",
+      "description": "Escaneo del QR en la puerta, manifiesto y sincronización sin conexión"
+    }
+  ],
+  "paths": {
+    "/api/usuarios/me": {
+      "get": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Cuenta autenticada, con sus roles vigentes",
+        "operationId": "yo",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Actualiza nombre y teléfono",
+        "operationId": "actualizar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActualizarPerfilDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/contrasena": {
+      "put": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Cambia la contraseña (exige la actual)",
+        "operationId": "cambiarContrasena",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambiarContrasenaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "No Content"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Detalle del evento (los borradores solo los ve su organizador o un administrador)",
+        "operationId": "detalle",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Evento"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Modifica el evento aplicando las políticas de negocio",
+        "description": "422 si el aforo queda por debajo de lo ya entregado. Si cambia la fecha se avisa a quien tiene boleto.",
+        "operationId": "modificar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventoEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Evento"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/asientos": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Plano de butacas con su estado (DISPONIBLE, RESERVADO u OCUPADO)",
+        "operationId": "asientos",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Asiento"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "put": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Activa, cambia o desactiva el plano de asientos (409 si ya hay boletos emitidos)",
+        "operationId": "cambiarAsientos",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsientosEntradaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Evento"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/usuarios/{id}/roles": {
+      "put": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Reemplaza los roles de una cuenta (filas de usuario_rol)",
+        "operationId": "cambiarRoles",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambiarRolesDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/usuarios/{id}/estado": {
+      "put": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Activa o bloquea una cuenta",
+        "description": "Una cuenta bloqueada pierde el acceso de inmediato, aunque su token siga vigente.",
+        "operationId": "cambiarEstado",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CambiarEstadoDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/validaciones": {
+      "get": {
+        "tags": [
+          "Validación de acceso"
+        ],
+        "summary": "Últimos accesos registrados por la cuenta autenticada",
+        "operationId": "bitacora",
+        "parameters": [
+          {
+            "name": "eventoId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/RegistroValidacion"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Validación de acceso"
+        ],
+        "summary": "Valida un boleto y lo marca como usado de forma atómica",
+        "description": "Verifica la firma antes de consultar la base. Solo el primer escaneo de un boleto lo admite.",
+        "operationId": "validar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ValidarDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoValidacion"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/validaciones/sincronizar": {
+      "post": {
+        "tags": [
+          "Validación de acceso"
+        ],
+        "summary": "Sube las validaciones hechas sin conexión y las reconcilia",
+        "description": "Aplica la misma regla de un solo uso y señala cuáles resultaron duplicadas. `/validaciones/sincronizar` es el nombre que usa el Anexo E.",
+        "operationId": "lote",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoteDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoLote"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/validaciones/lote": {
+      "post": {
+        "tags": [
+          "Validación de acceso"
+        ],
+        "summary": "Sube las validaciones hechas sin conexión y las reconcilia",
+        "description": "Aplica la misma regla de un solo uso y señala cuáles resultaron duplicadas. `/validaciones/sincronizar` es el nombre que usa el Anexo E.",
+        "operationId": "lote_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoteDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResultadoLote"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/roles/organizador": {
+      "post": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Añade el rol ORGANIZADOR a la cuenta (fila en usuario_rol)",
+        "operationId": "convertirseEnOrganizador",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Quita el rol ORGANIZADOR",
+        "description": "409 si tiene eventos publicados con boletos vigentes, si es su único rol o si la cuenta es de administración.",
+        "operationId": "dejarDeSerOrganizador",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsuarioDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/notificaciones/{id}/leida": {
+      "post": {
+        "tags": [
+          "Notificaciones"
+        ],
+        "summary": "Marca una notificación como leída (404 si no es de la cuenta)",
+        "operationId": "marcarLeida",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Notificacion"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/notificaciones/leidas": {
+      "post": {
+        "tags": [
+          "Notificaciones"
+        ],
+        "summary": "Marca todas como leídas y devuelve cuántas cambiaron",
+        "operationId": "marcarTodas",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "integer",
+                  "format": "int32"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/metodos-pago": {
+      "get": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "Tarjetas guardadas (marca, últimos 4 y vencimiento; nunca el número)",
+        "operationId": "metodos",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetodoPago"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "Guarda una tarjeta ya tokenizada por la pasarela",
+        "description": "Campos admitidos: `marca`, `ultimos4`, `vencimiento` (MM/AA), `tokenPasarela` y `predeterminado`. 400 si llega cualquier campo que parezca un número de tarjeta (PAN) o un código de seguridad (CVV).",
+        "operationId": "agregar",
+        "requestBody": {
+          "description": "marca, ultimos4, vencimiento, tokenPasarela, predeterminado",
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": {}
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/MetodoPago"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/metodos-pago/{id}/predeterminado": {
+      "post": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "Marca una tarjeta como predeterminada",
+        "operationId": "predeterminado",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetodoPago"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/pagos/{id}/confirmar": {
+      "post": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "SIMULACIÓN: confirma un pago pendiente (OXXO/SPEI) y emite los boletos",
+        "description": "Sustituye al aviso (webhook) de la pasarela mientras no hay proveedor. Disponible para el titular de la orden solo en el perfil dev, y para un administrador en cualquier perfil.",
+        "operationId": "confirmarPago",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenCreada"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/ordenes": {
+      "get": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "Órdenes de la cuenta autenticada",
+        "operationId": "mias",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrdenCreada"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "Compra o confirmación de N boletos en una sola orden (todo o nada)",
+        "description": "El precio y el total se derivan de `tipo_boleto`. El inventario se descuenta por lote con UPDATE condicional y los asientos se toman solo si siguen disponibles; si falta uno solo, no se emite nada.\n\n201 orden creada · 200 la clave `Idempotency-Key` ya se había procesado (misma orden, sin cobrar ni emitir de nuevo) · 409 sin cupo, asientos ocupados o evento no disponible · 422 pago rechazado o regla de negocio.\n\nLa pasarela es SIMULADA: no hay cargos reales. Una tarjeta cuyo token termina en `-rechazo` se rechaza; OXXO y SPEI quedan PENDIENTE y los boletos se emiten al confirmar el pago.",
+        "operationId": "crear",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "description": "Identificador de la operación generado por el cliente (8 a 64 caracteres)",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CrearOrden"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenCreada"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Eventos publicados, con búsqueda, filtros y orden por distancia",
+        "description": "Con `lat` y `lng` la lista se ordena por distancia real (Haversine) y cada evento lleva `distanciaKm`. Los eventos sin coordenadas van al final, sin distancia. Sin `lat`/`lng` se ordena por fecha.",
+        "operationId": "catalogo",
+        "parameters": [
+          {
+            "name": "ciudad",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "categoria",
+            "in": "query",
+            "description": "Nombre o id de la categoría",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "desde",
+            "in": "query",
+            "description": "ISO-8601 con zona o fecha AAAA-MM-DD",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "hasta",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lat",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "lng",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "radioKm",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          {
+            "name": "q",
+            "in": "query",
+            "description": "Texto a buscar en nombre, lugar, dirección y categoría",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "precio",
+            "in": "query",
+            "description": "GRATIS o DE_PAGO",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lugar",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limite",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Evento"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Crea un evento en borrador (o lo publica si `publicar` es true)",
+        "operationId": "crear_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EventoEntrada"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Evento"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/realizado": {
+      "post": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Marca como finalizado un evento publicado que ya comenzó",
+        "operationId": "realizado",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Evento"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/publicar": {
+      "post": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Publica un borrador: exige coordenadas, fecha futura y al menos un tipo de boleto",
+        "operationId": "publicar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Evento"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/personal-acceso": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Personal de acceso designado para el evento",
+        "operationId": "personal",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonalAcceso"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Designa como validador a una cuenta ya registrada, buscándola por correo",
+        "operationId": "designar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DesignarPersonalDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonalAcceso"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/cancelacion": {
+      "post": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Cancela el evento, anula boletos y registra reembolsos",
+        "description": "409 evento iniciado, finalizado o ya cancelado; 422 comisión no aceptada o motivo ausente en cancelación administrativa; 403 rol sin permiso. Los reembolsos son de la pasarela SIMULADA.",
+        "operationId": "cancelar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelacionDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/CancelacionResultado"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/auth/sesion": {
+      "post": {
+        "tags": [
+          "Acceso"
+        ],
+        "summary": "Autentica por correo, teléfono o CURP y devuelve el JWT (12 h)",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/login": {
+      "post": {
+        "tags": [
+          "Acceso"
+        ],
+        "summary": "Autentica por correo, teléfono o CURP y devuelve el JWT (12 h)",
+        "operationId": "login_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/SesionDto"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/registro": {
+      "post": {
+        "tags": [
+          "Acceso"
+        ],
+        "summary": "Crea la cuenta en estado pendiente y genera el código de verificación",
+        "description": "SIMULACIÓN: sin proveedor de correo/SMS, el código se escribe en el log y, solo en el perfil dev, se devuelve en `otpSimulado`.",
+        "operationId": "registro",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegistroDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegistroRespuesta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/otp/verificar": {
+      "post": {
+        "tags": [
+          "Acceso"
+        ],
+        "summary": "Activa la cuenta con el código de un solo uso",
+        "operationId": "verificar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificarOtpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpRespuesta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/verificacion": {
+      "post": {
+        "tags": [
+          "Acceso"
+        ],
+        "summary": "Activa la cuenta con el código de un solo uso",
+        "operationId": "verificar_1",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerificarOtpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpRespuesta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/otp/reenviar": {
+      "post": {
+        "tags": [
+          "Acceso"
+        ],
+        "summary": "Genera un código nuevo e invalida el anterior",
+        "operationId": "reenviar",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReenviarOtpDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OtpRespuesta"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/recordatorios/generar": {
+      "post": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Ejecuta ahora la tarea diaria de recordatorios",
+        "description": "Útil para demostraciones y pruebas; la tarea programada hace lo mismo cada día.",
+        "operationId": "generarRecordatorios",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "integer",
+                    "format": "int32"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/categorias": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Catálogo de categorías",
+        "operationId": "categorias",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Categoria"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Crea una categoría (409 si el nombre ya existe)",
+        "operationId": "crearCategoria",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CategoriaEntradaDto"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Categoria"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/validaciones/eventos": {
+      "get": {
+        "tags": [
+          "Validación de acceso"
+        ],
+        "summary": "Eventos en los que la cuenta está designada como personal de acceso",
+        "operationId": "eventos",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Evento"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/roles/organizador/puede-dejar": {
+      "get": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Indica si la cuenta puede dejar de ser organizadora y, si no, el motivo",
+        "operationId": "puedeDejar",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/notificaciones": {
+      "get": {
+        "tags": [
+          "Notificaciones"
+        ],
+        "summary": "Notificaciones de la cuenta, de la más reciente a la más antigua",
+        "operationId": "listar",
+        "parameters": [
+          {
+            "name": "soloNoLeidas",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Notificacion"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/cargos": {
+      "get": {
+        "tags": [
+          "Usuarios"
+        ],
+        "summary": "Cargos del organizador (comisiones de cancelación)",
+        "operationId": "cargos",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CargoDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/ordenes/{id}": {
+      "get": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "Una orden con todos sus boletos",
+        "operationId": "obtener",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrdenCreada"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/tipos": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Tipos de boleto del evento con su precio y disponibilidad",
+        "operationId": "tipos",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TipoBoleto"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/eventos/{id}/reportes": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Conteo de boletos, ingresos y accesos validados",
+        "operationId": "reportes",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReporteEvento"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/politica-cancelacion": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Política de cancelación calculada en servidor",
+        "description": "Es administrativa cuando la consulta un administrador que no organiza el evento.",
+        "operationId": "politica",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/PoliticaCancelacion"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/manifiesto": {
+      "get": {
+        "tags": [
+          "Validación de acceso"
+        ],
+        "summary": "Manifiesto del evento para validar sin conexión",
+        "description": "Huellas SHA-256 de `codigo.firma`. La verificación sin conexión es por pertenencia al manifiesto, no por firma.",
+        "operationId": "manifiesto",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Manifiesto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/boletos": {
+      "get": {
+        "tags": [
+          "Boletos"
+        ],
+        "summary": "Boletos emitidos de un evento, para el panel de su organizador",
+        "operationId": "deEvento",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Boleto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/mios": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Eventos del organizador autenticado, en cualquier estado",
+        "operationId": "mios",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Evento"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/categorias": {
+      "get": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Catálogo de categorías",
+        "operationId": "categorias_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Categoria"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/boletos": {
+      "get": {
+        "tags": [
+          "Boletos"
+        ],
+        "summary": "Boletos de la cuenta autenticada, con evento, tipo y asiento resueltos",
+        "operationId": "mios_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Boleto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/boletos/{id}": {
+      "get": {
+        "tags": [
+          "Boletos"
+        ],
+        "summary": "Un boleto (su titular, el organizador del evento o un administrador)",
+        "operationId": "obtener_1",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/Boleto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/usuarios": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Todas las cuentas (la CURP siempre enmascarada)",
+        "operationId": "usuarios",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/UsuarioDto"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/admin/eventos": {
+      "get": {
+        "tags": [
+          "Administración"
+        ],
+        "summary": "Todos los eventos, en cualquier estado",
+        "operationId": "eventos_1",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Evento"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/usuarios/me/metodos-pago/{id}": {
+      "delete": {
+        "tags": [
+          "Órdenes y pagos"
+        ],
+        "summary": "Elimina una tarjeta guardada y devuelve las que quedan",
+        "operationId": "eliminar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MetodoPago"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/api/eventos/{id}/personal-acceso/{usuarioId}": {
+      "delete": {
+        "tags": [
+          "Eventos"
+        ],
+        "summary": "Retira a una persona del personal de acceso del evento",
+        "operationId": "retirar",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "usuarioId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PersonalAcceso"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ActualizarPerfilDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 0
+          },
+          "telefono": {
+            "type": "string",
+            "pattern": "^$|^\\d{10}$"
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "UsuarioDto": {
+        "type": "object",
+        "description": "Cuenta de usuario. La CURP nunca se devuelve completa.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "telefono": {
+            "type": "string"
+          },
+          "curpEnmascarada": {
+            "type": "string",
+            "description": "CURP enmascarada: 4 primeros y 2 últimos caracteres",
+            "example": "ORGA············04"
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "estado": {
+            "type": "string"
+          },
+          "correoVerificado": {
+            "type": "boolean"
+          },
+          "telefonoVerificado": {
+            "type": "boolean"
+          },
+          "fechaRegistro": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CambiarContrasenaDto": {
+        "type": "object",
+        "properties": {
+          "actual": {
+            "type": "string",
+            "minLength": 1
+          },
+          "nueva": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "actual",
+          "nueva"
+        ]
+      },
+      "EventoEntrada": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 0
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "lugar": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 0
+          },
+          "direccion": {
+            "type": "string",
+            "maxLength": 240,
+            "minLength": 0
+          },
+          "ciudad": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "latitud": {
+            "type": "number",
+            "format": "double",
+            "maximum": 90,
+            "minimum": -90
+          },
+          "longitud": {
+            "type": "number",
+            "format": "double",
+            "maximum": 180,
+            "minimum": -180
+          },
+          "categoria": {
+            "type": "string",
+            "description": "Nombre de la categoría (catálogo)"
+          },
+          "categoriaId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fechaHoraInicio": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaHoraFin": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "esDePago": {
+            "type": "boolean"
+          },
+          "precio": {
+            "type": "number",
+            "description": "Precio único cuando no se envían `tipos`"
+          },
+          "aforo": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Se ignora si el evento tiene plano de asientos"
+          },
+          "requiereAsiento": {
+            "type": "boolean"
+          },
+          "secciones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeccionDto"
+            }
+          },
+          "tipos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TipoEntradaDto"
+            }
+          },
+          "publicar": {
+            "type": "boolean",
+            "description": "true para crear y publicar en un paso"
+          }
+        },
+        "required": [
+          "fechaHoraInicio",
+          "lugar",
+          "nombre"
+        ]
+      },
+      "SeccionDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 0
+          },
+          "filas": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 26,
+            "minimum": 1
+          },
+          "asientosPorFila": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 40,
+            "minimum": 1
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "TipoEntradaDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 0
+          },
+          "precio": {
+            "type": "number",
+            "minimum": 0.0
+          },
+          "cantidad": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "nombre",
+          "precio"
+        ]
+      },
+      "Evento": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "lugar": {
+            "type": "string"
+          },
+          "direccion": {
+            "type": "string"
+          },
+          "ciudad": {
+            "type": "string"
+          },
+          "latitud": {
+            "type": "number",
+            "format": "double",
+            "description": "Puede faltar junto con longitud; nunca se rellena con 0"
+          },
+          "longitud": {
+            "type": "number",
+            "format": "double"
+          },
+          "categoria": {
+            "type": "string"
+          },
+          "categoriaId": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fechaHoraInicio": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaHoraFin": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "esDePago": {
+            "type": "boolean"
+          },
+          "requiereAsiento": {
+            "type": "boolean"
+          },
+          "aforo": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "disponibles": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lugares que se pueden pedir ahora: inventario de los tipos y, si hay plano, asientos libres"
+          },
+          "vendidos": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Boletos vigentes (válidos o usados)"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "organizadorId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "organizadorNombre": {
+            "type": "string"
+          },
+          "precioDesde": {
+            "type": "string",
+            "description": "Precio más bajo entre los tipos de boleto; \"0.00\" si es gratuito"
+          },
+          "distanciaKm": {
+            "type": "number",
+            "format": "double",
+            "description": "Distancia en km al punto enviado en lat/lng; ausente si no se envió o el evento no tiene coordenadas"
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tieneBoletos": {
+            "type": "boolean"
+          },
+          "asientosTotales": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "fechaCancelacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "canceladoPor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "canceladoPorNombre": {
+            "type": "string"
+          },
+          "motivoCancelacion": {
+            "type": "string"
+          },
+          "comisionCancelacion": {
+            "type": "string"
+          }
+        }
+      },
+      "AsientosEntradaDto": {
+        "type": "object",
+        "properties": {
+          "requiereAsiento": {
+            "type": "boolean"
+          },
+          "secciones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SeccionDto"
+            }
+          }
+        },
+        "required": [
+          "requiereAsiento"
+        ]
+      },
+      "CambiarRolesDto": {
+        "type": "object",
+        "properties": {
+          "roles": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "ASISTENTE",
+                "ORGANIZADOR",
+                "VALIDADOR",
+                "ADMIN"
+              ]
+            },
+            "minItems": 1
+          }
+        },
+        "required": [
+          "roles"
+        ]
+      },
+      "CambiarEstadoDto": {
+        "type": "object",
+        "properties": {
+          "estado": {
+            "type": "string",
+            "enum": [
+              "PENDIENTE",
+              "ACTIVO",
+              "BLOQUEADO"
+            ]
+          }
+        },
+        "required": [
+          "estado"
+        ]
+      },
+      "ValidarDto": {
+        "type": "object",
+        "properties": {
+          "contenidoQr": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 0
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "contenidoQr",
+          "eventoId"
+        ]
+      },
+      "ResultadoValidacion": {
+        "type": "object",
+        "description": "Resultado de un escaneo. Un rechazo también responde 200: es un resultado, no un error.",
+        "properties": {
+          "permitido": {
+            "type": "boolean"
+          },
+          "resultado": {
+            "type": "string",
+            "description": "PERMITIDO | YA_USADO | CANCELADO | EVENTO_CANCELADO | EXPIRADO | FIRMA_INVALIDA | NO_ENCONTRADO | OTRO_EVENTO"
+          },
+          "titulo": {
+            "type": "string"
+          },
+          "detalle": {
+            "type": "string"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "asiento": {
+            "type": "string"
+          },
+          "eventoNombre": {
+            "type": "string"
+          },
+          "tipoNombre": {
+            "type": "string"
+          },
+          "fechaUso": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "duplicada": {
+            "type": "boolean",
+            "description": "Solo en lotes: el boleto ya había sido admitido por otro escaneo"
+          },
+          "claveCliente": {
+            "type": "string",
+            "description": "Solo en lotes: identificador del escaneo que envió el dispositivo"
+          }
+        }
+      },
+      "EscaneoOfflineDto": {
+        "type": "object",
+        "properties": {
+          "contenidoQr": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 0
+          },
+          "fechaEscaneo": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "claveCliente": {
+            "type": "string",
+            "description": "Identificador único del escaneo en el dispositivo; reenviar el lote no lo duplica",
+            "maxLength": 64,
+            "minLength": 8
+          }
+        },
+        "required": [
+          "claveCliente",
+          "contenidoQr",
+          "fechaEscaneo"
+        ]
+      },
+      "LoteDto": {
+        "type": "object",
+        "properties": {
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "validaciones": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EscaneoOfflineDto"
+            },
+            "maxItems": 500,
+            "minItems": 0
+          }
+        },
+        "required": [
+          "eventoId",
+          "validaciones"
+        ]
+      },
+      "ResultadoLote": {
+        "type": "object",
+        "properties": {
+          "recibidas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "permitidas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "rechazadas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "duplicadas": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "resultados": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ResultadoValidacion"
+            }
+          }
+        }
+      },
+      "Notificacion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "texto": {
+            "type": "string"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "leida": {
+            "type": "boolean"
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "boletoId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      },
+      "MetodoPago": {
+        "type": "object",
+        "description": "Nunca incluye el número de tarjeta ni el CVV",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "marca": {
+            "type": "string"
+          },
+          "ultimos4": {
+            "type": "string"
+          },
+          "vencimiento": {
+            "type": "string"
+          },
+          "predeterminado": {
+            "type": "boolean"
+          },
+          "fechaRegistro": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "Asiento": {
+        "type": "object",
+        "description": "Estados reales del esquema: DISPONIBLE (libre), RESERVADO y OCUPADO",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "seccion": {
+            "type": "string"
+          },
+          "fila": {
+            "type": "string"
+          },
+          "numero": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          }
+        }
+      },
+      "Boleto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "ordenId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipoBoletoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "asientoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "firma": {
+            "type": "string",
+            "description": "Firma HMAC-SHA256 del código (32 caracteres hexadecimales)"
+          },
+          "contenidoQr": {
+            "type": "string",
+            "description": "Contenido del QR: `codigo.firma`"
+          },
+          "estado": {
+            "type": "string",
+            "description": "VALIDO | USADO | CANCELADO | EXPIRADO"
+          },
+          "fechaEmision": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaUso": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "asistenteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipoNombre": {
+            "type": "string"
+          },
+          "precio": {
+            "type": "string"
+          },
+          "posicion": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Posición del boleto dentro de su orden (1..N)"
+          },
+          "totalEnOrden": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Boletos de la orden"
+          },
+          "totalOrden": {
+            "type": "string"
+          },
+          "estadoOrden": {
+            "type": "string"
+          },
+          "fechaOrden": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "asiento": {
+            "$ref": "#/components/schemas/Asiento"
+          },
+          "evento": {
+            "$ref": "#/components/schemas/Evento"
+          }
+        }
+      },
+      "OrdenCreada": {
+        "type": "object",
+        "description": "La orden y todos sus boletos (ninguno si el pago no está aprobado)",
+        "properties": {
+          "ordenId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "asistenteId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "estadoOrden": {
+            "type": "string",
+            "description": "PENDIENTE | PAGADA | CANCELADA | REEMBOLSADA"
+          },
+          "estadoPago": {
+            "type": "string",
+            "description": "PENDIENTE | APROBADO | RECHAZADO | REEMBOLSADO; null en órdenes sin cobro"
+          },
+          "total": {
+            "type": "string",
+            "description": "Importe exacto como texto",
+            "example": "360.00"
+          },
+          "moneda": {
+            "type": "string"
+          },
+          "referenciaPago": {
+            "type": "string",
+            "description": "Referencia OXXO o CLABE SPEI cuando el pago queda pendiente"
+          },
+          "pagoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "medioPago": {
+            "type": "string"
+          },
+          "fechaCreacion": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "pagoSimulado": {
+            "type": "boolean",
+            "description": "true: la pasarela es simulada y no hubo movimiento real de dinero"
+          },
+          "boletos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Boleto"
+            }
+          }
+        }
+      },
+      "CrearOrden": {
+        "type": "object",
+        "description": "Compra o confirmación de N boletos. `cantidad = 1` es la compra sencilla.",
+        "properties": {
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "tipoBoletoId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Obligatorio en eventos de pago; en los gratuitos puede omitirse"
+          },
+          "cantidad": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 1
+          },
+          "asientosIds": {
+            "type": "array",
+            "description": "Vacío si el evento no requiere asiento; si lo requiere, uno por boleto y sin repetir",
+            "items": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          "metodoPagoId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Tarjeta guardada; null para OXXO, SPEI o tarjeta con token de un solo uso"
+          },
+          "metodo": {
+            "type": "string",
+            "description": "TARJETA | OXXO | SPEI | GRATIS"
+          },
+          "tokenPasarela": {
+            "type": "string",
+            "description": "Token de la pasarela cuando no se usa una tarjeta guardada. En la pasarela SIMULADA, un token terminado en `-rechazo` produce un pago rechazado."
+          }
+        },
+        "required": [
+          "eventoId"
+        ]
+      },
+      "DesignarPersonalDto": {
+        "type": "object",
+        "properties": {
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "correo"
+        ]
+      },
+      "PersonalAcceso": {
+        "type": "object",
+        "properties": {
+          "usuarioId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "designado": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CancelacionDto": {
+        "type": "object",
+        "properties": {
+          "motivo": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 0
+          },
+          "aceptaComision": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CancelacionResultado": {
+        "type": "object",
+        "properties": {
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "importeReembolsado": {
+            "type": "string"
+          },
+          "comision": {
+            "type": "string"
+          },
+          "boletosAnulados": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "asistentesNotificados": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "canceladoPor": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "fechaCancelacion": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "LoginDto": {
+        "type": "object",
+        "properties": {
+          "identificador": {
+            "type": "string",
+            "description": "Correo, teléfono (10 dígitos) o CURP",
+            "minLength": 1
+          },
+          "contrasena": {
+            "type": "string",
+            "minLength": 1
+          },
+          "accesoPersonal": {
+            "type": "boolean",
+            "description": "true cuando se entra por el acceso de organizadores y personal"
+          }
+        },
+        "required": [
+          "contrasena",
+          "identificador"
+        ]
+      },
+      "SesionDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "expira": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "usuario": {
+            "$ref": "#/components/schemas/UsuarioDto"
+          }
+        }
+      },
+      "RegistroDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 0
+          },
+          "correo": {
+            "type": "string",
+            "format": "email",
+            "maxLength": 180,
+            "minLength": 0
+          },
+          "telefono": {
+            "type": "string",
+            "pattern": "^$|^\\d{10}$"
+          },
+          "curp": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z]{4}\\d{6}[HMhm][A-Za-z]{5}[A-Za-z0-9]\\d$"
+          },
+          "contrasena": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "contrasena",
+          "correo",
+          "curp",
+          "nombre"
+        ]
+      },
+      "RegistroRespuesta": {
+        "type": "object",
+        "description": "Resultado del registro. `otpSimulado` solo aparece en el perfil dev: no hay proveedor de correo/SMS.",
+        "properties": {
+          "usuarioId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "correo": {
+            "type": "string"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "otpSimulado": {
+            "type": "string",
+            "description": "SIMULACIÓN. Código de verificación; solo se devuelve en el perfil dev."
+          },
+          "simulacion": {
+            "type": "boolean"
+          },
+          "aviso": {
+            "type": "string"
+          }
+        }
+      },
+      "VerificarOtpDto": {
+        "type": "object",
+        "properties": {
+          "usuarioId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^\\d{6}$"
+          }
+        },
+        "required": [
+          "codigo",
+          "usuarioId"
+        ]
+      },
+      "OtpRespuesta": {
+        "type": "object",
+        "properties": {
+          "verificado": {
+            "type": "boolean"
+          },
+          "otpSimulado": {
+            "type": "string",
+            "description": "SIMULACIÓN. Solo en el perfil dev, al reenviar el código."
+          },
+          "simulacion": {
+            "type": "boolean"
+          },
+          "aviso": {
+            "type": "string"
+          }
+        }
+      },
+      "ReenviarOtpDto": {
+        "type": "object",
+        "properties": {
+          "usuarioId": {
+            "type": "integer",
+            "format": "int64"
+          }
+        },
+        "required": [
+          "usuarioId"
+        ]
+      },
+      "CategoriaEntradaDto": {
+        "type": "object",
+        "properties": {
+          "nombre": {
+            "type": "string",
+            "maxLength": 60,
+            "minLength": 0
+          }
+        },
+        "required": [
+          "nombre"
+        ]
+      },
+      "Categoria": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "nombre": {
+            "type": "string"
+          }
+        }
+      },
+      "RegistroValidacion": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "codigo": {
+            "type": "string"
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventoNombre": {
+            "type": "string"
+          },
+          "fechaHora": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fechaEscaneo": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "resultado": {
+            "type": "string"
+          },
+          "motivo": {
+            "type": "string"
+          },
+          "titulo": {
+            "type": "string"
+          },
+          "offline": {
+            "type": "boolean"
+          },
+          "sincronizado": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CargoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "concepto": {
+            "type": "string"
+          },
+          "importe": {
+            "type": "string"
+          },
+          "pagado": {
+            "type": "boolean"
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TipoBoleto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "precio": {
+            "type": "string"
+          },
+          "cantidadTotal": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cantidadDisponible": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "ReporteEvento": {
+        "type": "object",
+        "properties": {
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "boletosEmitidos": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "boletosValidos": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "boletosUsados": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "boletosCancelados": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "ingresos": {
+            "type": "string"
+          },
+          "accesosPermitidos": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "accesosRechazados": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "porTipo": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReporteTipoDto"
+            }
+          }
+        }
+      },
+      "ReporteTipoDto": {
+        "type": "object",
+        "properties": {
+          "tipoBoletoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "precio": {
+            "type": "string"
+          },
+          "vendidos": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "disponibles": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "PoliticaCancelacion": {
+        "type": "object",
+        "properties": {
+          "permitida": {
+            "type": "boolean"
+          },
+          "tipo": {
+            "type": "string",
+            "description": "BORRADOR | GRATUITO | DE_PAGO_SIN_VENTAS | DE_PAGO_CON_COMISION | ADMINISTRATIVA"
+          },
+          "importeCobrado": {
+            "type": "string"
+          },
+          "comision": {
+            "type": "string"
+          },
+          "reembolso": {
+            "type": "string"
+          },
+          "boletosAfectados": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "motivoBloqueo": {
+            "type": "string"
+          }
+        }
+      },
+      "EntradaManifiestoDto": {
+        "type": "object",
+        "properties": {
+          "huella": {
+            "type": "string",
+            "description": "SHA-256 en hexadecimal de `codigo.firma`"
+          },
+          "estado": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string"
+          },
+          "asiento": {
+            "type": "string"
+          },
+          "terminacion": {
+            "type": "string",
+            "description": "Últimos 4 caracteres del código, para mostrarlo al validador"
+          }
+        }
+      },
+      "Manifiesto": {
+        "type": "object",
+        "description": "Lista de boletos de un evento para validar sin conexión. Cada boleto se identifica por la huella SHA-256 de `codigo.firma`. La clave HMAC nunca sale del servidor: sin conexión, el dispositivo comprueba que la huella del QR escaneado PERTENECE al manifiesto; no verifica la firma.",
+        "properties": {
+          "eventoId": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "eventoNombre": {
+            "type": "string"
+          },
+          "generado": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "algoritmo": {
+            "type": "string"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "boletos": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntradaManifiestoDto"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "bearer": {
+        "type": "http",
+        "description": "Token devuelto por POST /api/auth/login (expira a las 12 horas)",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    }
+  }
+}

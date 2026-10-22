@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens.validator
 
+import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -8,6 +9,7 @@ import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -33,6 +35,8 @@ fun CamaraQr(
     modifier: Modifier = Modifier,
     activo: Boolean,
     onCodigo: (String) -> Unit,
+    /** Linterna del teléfono encendida (accesos de noche). */
+    linterna: Boolean = false,
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val ejecutor = remember { Executors.newSingleThreadExecutor() }
@@ -47,7 +51,11 @@ fun CamaraQr(
     // actualizados los valores que consulta en cada fotograma.
     val activoActual by rememberUpdatedState(activo)
     val onCodigoActual by rememberUpdatedState(onCodigo)
+    val linternaActual by rememberUpdatedState(linterna)
     val proveedorRef = remember { AtomicReference<ProcessCameraProvider?>(null) }
+    val camaraRef = remember { AtomicReference<Camera?>(null) }
+
+    LaunchedEffect(linterna) { camaraRef.get()?.cameraControl?.enableTorch(linterna) }
 
     DisposableEffect(Unit) {
         onDispose {
@@ -85,9 +93,11 @@ fun CamaraQr(
 
                 try {
                     proveedor.unbindAll()
-                    proveedor.bindToLifecycle(
+                    val camara = proveedor.bindToLifecycle(
                         lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA, preview, analisis
                     )
+                    camaraRef.set(camara)
+                    if (linternaActual) camara.cameraControl.enableTorch(true)
                 } catch (e: Exception) {
                     e.printStackTrace()
                 }

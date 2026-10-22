@@ -36,7 +36,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.SessionManager
 import com.uv.enzona.ui.components.BotonEnZona
 import com.uv.enzona.ui.components.CampoEnZona
@@ -118,20 +119,26 @@ fun EditProfileScreen(onVolver: () -> Unit) {
     var nombre by remember(usuario.id) { mutableStateOf(usuario.nombre) }
     var telefono by remember(usuario.id) { mutableStateOf(usuario.telefono) }
     var guardado by remember { mutableStateOf(false) }
+    val operacion = rememberOperacion()
 
     PantallaAjuste("Editar mis datos", onVolver) {
-        CampoEnZona(nombre, { nombre = it; guardado = false }, "Nombre completo")
+        CampoEnZona(nombre, { nombre = it; guardado = false; operacion.error = null }, "Nombre completo")
         Spacer(Modifier.height(12.dp))
-        CampoEnZona(telefono, { telefono = it; guardado = false }, "Teléfono", teclado = KeyboardType.Phone)
+        CampoEnZona(
+            telefono, { telefono = it.filter { c -> c.isDigit() }.take(10); guardado = false; operacion.error = null },
+            "Teléfono", teclado = KeyboardType.Phone, error = operacion.error,
+            ayuda = "10 dígitos, sin espacios",
+        )
         Spacer(Modifier.height(16.dp))
 
         Tarjeta {
             Text("CURP", color = TextoSecundario, style = MaterialTheme.typography.labelMedium)
-            Text(usuario.curp, color = TextoPrincipal, fontWeight = FontWeight.SemiBold)
+            // La API nunca devuelve la CURP (ni enmascarada): solo los datos de prueba la muestran
+            Text(usuario.curp.ifBlank { "Guardada cifrada en el servidor" }, color = TextoPrincipal, fontWeight = FontWeight.SemiBold)
             Spacer(Modifier.height(8.dp))
             Text(
-                "Este dato se almacena cifrado y no puede modificarse desde la app. Se usa únicamente para " +
-                    "verificar tu identidad y reducir el fraude de boletos.",
+                "Este dato se almacena cifrado, se muestra enmascarado y no puede modificarse desde la app. Se usa " +
+                    "únicamente para verificar tu identidad y reducir el fraude de boletos.",
                 color = TextoSecundario, style = MaterialTheme.typography.bodyMedium
             )
         }
@@ -140,10 +147,14 @@ fun EditProfileScreen(onVolver: () -> Unit) {
         BotonEnZona(
             texto = if (guardado) "Cambios guardados" else "Guardar cambios",
             habilitado = nombre.isNotBlank(),
+            cargando = operacion.enCurso,
             onClick = {
-                MockRepository.actualizarPerfil(usuario.id, nombre.trim(), telefono.trim())
-                SessionManager.refrescar()
-                guardado = true
+                operacion.ejecutar(
+                    alTerminar = { cuenta: com.uv.enzona.data.model.Usuario ->
+                        SessionManager.actualizar(cuenta)
+                        guardado = true
+                    },
+                ) { Repositorio.actual.actualizarPerfil(nombre.trim(), telefono.trim()) }
             }
         )
     }
@@ -156,6 +167,7 @@ fun EditProfileScreen(onVolver: () -> Unit) {
 @Composable
 fun SecurityScreen(onVolver: () -> Unit) {
     val usuario = SessionManager.usuario ?: return
+    val operacion = rememberOperacion()
     var actual by remember { mutableStateOf("") }
     var nueva by remember { mutableStateOf("") }
     var confirmar by remember { mutableStateOf("") }
@@ -226,16 +238,18 @@ fun SecurityScreen(onVolver: () -> Unit) {
         BotonEnZona(
             texto = "Actualizar contraseña",
             habilitado = actual.isNotBlank() && nueva.isNotBlank() && confirmar.isNotBlank(),
+            cargando = operacion.enCurso,
             onClick = {
                 if (nueva != confirmar) {
                     mensaje = "Las contraseñas nuevas no coinciden."; esError = true
                 } else {
-                    MockRepository.cambiarContrasena(usuario.id, actual, nueva)
-                        .onSuccess {
+                    operacion.ejecutar(
+                        alTerminar = { _: Unit ->
                             mensaje = "Tu contraseña se actualizó correctamente."; esError = false
                             actual = ""; nueva = ""; confirmar = ""
-                        }
-                        .onFailure { mensaje = it.message; esError = true }
+                        },
+                        alFallar = { mensaje = it.message; esError = true },
+                    ) { Repositorio.actual.cambiarContrasena(actual, nueva) }
                 }
             }
         )
@@ -244,8 +258,8 @@ fun SecurityScreen(onVolver: () -> Unit) {
         Apartado(
             "Cómo protegemos tu cuenta",
             "Tu contraseña se guarda cifrada con un algoritmo de un solo sentido: ni el equipo de EnZona puede " +
-                "leerla. Las sesiones usan un token firmado que caduca, y tu CURP se almacena cifrado y nunca " +
-                "se muestra a terceros."
+                "leerla. Las sesiones usan un token firmado que caduca a las 12 horas y se guarda cifrado en este " +
+                "teléfono, y tu CURP se almacena cifrado y nunca se muestra completo."
         )
     }
 }

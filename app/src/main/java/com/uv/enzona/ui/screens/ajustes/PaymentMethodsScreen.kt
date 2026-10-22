@@ -38,8 +38,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
-import com.uv.enzona.data.SessionManager
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.Carga
+import com.uv.enzona.ui.components.IndicadorCarga
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.ui.components.BotonEnZona
 import com.uv.enzona.ui.components.CampoEnZona
 import com.uv.enzona.ui.theme.MoradoClaro
@@ -61,8 +64,9 @@ import com.uv.enzona.ui.theme.VerdeOk
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PaymentMethodsScreen(onVolver: () -> Unit) {
-    val usuarioId = SessionManager.usuarioId
-    val tarjetas = MockRepository.metodosDe(usuarioId)
+    val carga = rememberCarga { Repositorio.actual.metodosDePago() }
+    val tarjetas = carga.valor.orEmpty()
+    val operacion = rememberOperacion()
 
     var agregando by remember { mutableStateOf(false) }
     var numero by remember { mutableStateOf("") }
@@ -92,7 +96,19 @@ fun PaymentMethodsScreen(onVolver: () -> Unit) {
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp)
         ) {
-            if (tarjetas.isEmpty() && !agregando) {
+            when (val estado = carga.estado) {
+                is Carga.Cargando -> IndicadorCarga("Cargando tus tarjetas…", Modifier.padding(vertical = 24.dp))
+                is Carga.Fallo -> {
+                    Text(estado.mensaje, color = RojoError, style = MaterialTheme.typography.bodyMedium)
+                    TextButton(onClick = carga::recargar) { Text("Reintentar", color = NaranjaAcento) }
+                }
+                is Carga.Lista -> Unit
+            }
+            operacion.error?.let {
+                Text(it, color = RojoError, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(10.dp))
+            }
+            if (carga.estado is Carga.Lista && tarjetas.isEmpty() && !agregando) {
                 Text(
                     "Aún no tienes tarjetas guardadas. Puedes agregar una para pagar más rápido la próxima vez.",
                     color = TextoSecundario
@@ -120,7 +136,10 @@ fun PaymentMethodsScreen(onVolver: () -> Unit) {
                             Text("Vence ${tarjeta.vencimiento}", color = TextoSecundario,
                                 style = MaterialTheme.typography.labelMedium)
                         }
-                        IconButton(onClick = { MockRepository.eliminarMetodo(tarjeta.id) }) {
+                        IconButton(
+                            enabled = !operacion.enCurso,
+                            onClick = { operacion.ejecutar<Unit> { Repositorio.actual.eliminarMetodo(tarjeta.id) } },
+                        ) {
                             Icon(Icons.Filled.Delete, "Eliminar", tint = RojoError)
                         }
                     }
@@ -129,7 +148,10 @@ fun PaymentMethodsScreen(onVolver: () -> Unit) {
                             Text("● Predeterminada", color = VerdeOk,
                                 style = MaterialTheme.typography.labelMedium)
                         } else {
-                            TextButton(onClick = { MockRepository.marcarPredeterminado(tarjeta.id) }) {
+                            TextButton(
+                                enabled = !operacion.enCurso,
+                                onClick = { operacion.ejecutar<Unit> { Repositorio.actual.marcarPredeterminado(tarjeta.id) } },
+                            ) {
                                 Text("Usar como predeterminada", color = NaranjaAcento,
                                     style = MaterialTheme.typography.labelMedium)
                             }
@@ -181,14 +203,17 @@ fun PaymentMethodsScreen(onVolver: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                     BotonEnZona(
                         texto = "Guardar tarjeta",
+                        cargando = operacion.enCurso,
                         onClick = {
-                            MockRepository.agregarTarjeta(usuarioId, numero, vencimiento.trim(), titular.trim())
-                                .onSuccess {
+                            // El número y el CVV no salen del teléfono: solo viajan marca, últimos 4, vencimiento y token
+                            operacion.ejecutar(
+                                alTerminar = { _: com.uv.enzona.data.model.MetodoPago ->
                                     agregando = false
                                     numero = ""; vencimiento = ""; cvv = ""; titular = ""
                                     error = null
-                                }
-                                .onFailure { error = it.message }
+                                },
+                                alFallar = { error = it.message },
+                            ) { Repositorio.actual.agregarTarjeta(numero, vencimiento.trim(), titular.trim()) }
                         }
                     )
                     TextButton(onClick = { agregando = false; error = null }) {

@@ -48,6 +48,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.uv.enzona.data.Guias
+import com.uv.enzona.ui.components.GuiaDePantalla
+import com.uv.enzona.ui.components.PasoGuia
+import com.uv.enzona.ui.components.objetivoDeGuia
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
@@ -60,8 +64,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uv.enzona.data.MockRepository
-import com.uv.enzona.data.SessionManager
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.EsperaDeCarga
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.model.Asiento
 import com.uv.enzona.data.model.EstadoAsiento
 import com.uv.enzona.data.model.SolicitudCompra
@@ -118,10 +124,23 @@ fun SeatMapScreen(
     onBoletoEmitido: (Long) -> Unit,
     onIrAPago: (eventoId: Long, tipoId: Long?, cantidad: Int, asientosIds: List<Long>) -> Unit,
 ) {
-    val evento = MockRepository.eventos.find { it.id == eventoId } ?: return
-    val asientos = MockRepository.asientos.filter { it.eventoId == eventoId }
-    val tipo = tipoBoletoId?.let { id -> MockRepository.tiposBoleto.find { it.id == id } }
+    val titulo = if (cantidad <= 1) "Elige tu asiento" else "Elige $cantidad asientos"
+    val carga = rememberCarga(eventoId, tipoBoletoId) {
+        val repositorio = Repositorio.actual
+        Triple(
+            repositorio.evento(eventoId),
+            repositorio.asientosDe(eventoId),
+            tipoBoletoId?.let { id -> repositorio.tiposDe(eventoId).find { it.id == id } },
+        )
+    }
+    val cargado = carga.valor
+    if (cargado == null) {
+        EsperaDeCarga(carga, titulo = titulo, onVolver = onVolver, textoCargando = "Cargando el plano…")
+        return
+    }
+    val (evento, asientos, tipo) = cargado
     val objetivo = cantidad.coerceAtLeast(1)
+    val operacion = rememberOperacion()
 
     var seleccionados by rememberSaveable(stateSaver = saverSeleccion) { mutableStateOf(emptyList<Long>()) }
     var avisoLimite by remember { mutableStateOf<String?>(null) }
@@ -129,9 +148,8 @@ fun SeatMapScreen(
     var tamano by rememberSaveable { mutableIntStateOf(TAMANO_INICIAL) }
     var eligiendoPorNumero by rememberSaveable { mutableStateOf(false) }
     var confirmando by rememberSaveable { mutableStateOf(false) }
-    var procesando by remember { mutableStateOf(false) }
+    val procesando = operacion.enCurso
     val claveOperacion = rememberSaveable { UUID.randomUUID().toString() }
-    val alcance = rememberCoroutineScope()
 
     // Revalidación: si un asiento elegido dejó de estar libre, se señala y no se continúa
     val elegidos = seleccionados.mapNotNull { id -> asientos.find { it.id == id } }
@@ -187,22 +205,18 @@ fun SeatMapScreen(
                 TextButton(
                     enabled = !procesando,
                     onClick = {
-                        if (procesando) return@TextButton
-                        procesando = true
-                        alcance.launch {
-                            delay(500)
-                            MockRepository.comprar(
-                                SessionManager.usuarioId,
-                                SolicitudCompra(eventoId, tipo?.id, objetivo, seleccionados, claveOperacion),
-                            ).onSuccess { compra ->
-                                procesando = false
+                        operacion.ejecutar(
+                            alTerminar = { compra: com.uv.enzona.data.model.CompraRealizada ->
                                 confirmando = false
                                 onBoletoEmitido(compra.boletos.first().id)
-                            }.onFailure { fallo ->
-                                procesando = false
+                            },
+                            alFallar = { fallo ->
                                 confirmando = false
                                 error = fallo.message
-                            }
+                                carga.recargar()          // la disponibilidad cambió: se vuelve a pedir el plano
+                            },
+                        ) {
+                            Repositorio.actual.comprar(SolicitudCompra(eventoId, tipo?.id, objetivo, seleccionados, claveOperacion), pago = null)
                         }
                     },
                 ) { Text(if (procesando) "Confirmando…" else "Confirmar asiento") }
@@ -215,6 +229,7 @@ fun SeatMapScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { BarraSuperiorEnZona(titulo = if (objetivo == 1) "Elige tu asiento" else "Elige $objetivo asientos", onVolver = onVolver) },
         bottomBar = {
+            Box(Modifier.objetivoDeGuia("asientos_continuar")) {
             BarraAccion(
                 textoBoton = when {
                     !evento.esDePago -> "Confirmar asiento"
@@ -244,8 +259,19 @@ fun SeatMapScreen(
                     else confirmando = true
                 },
             )
+            }
         },
     ) { relleno ->
+        GuiaDePantalla(
+            clave = Guias.Clave.ASIENTOS,
+            pasos = listOf(
+                PasoGuia("asientos_leyenda", "Los colores te dicen qué asientos hay", "Verde: está libre. Gris: ya lo tomó alguien. Naranja: es el que tú elegiste."),
+                PasoGuia("asientos_plano", "Este es el plano del lugar", "El escenario está arriba, así que las primeras filas son las más cercanas. Toca un asiento verde para elegirlo. ¿Te arrepientes? Tócalo otra vez y se quita."),
+                PasoGuia("asientos_zoom", "¿Se ve muy pequeño?", "Con estos botones haces los asientos más grandes o más chicos para verlos mejor."),
+                PasoGuia("asientos_por_numero", "¿Ya sabes cuál quieres?", "Si conoces el número de tu asiento, por ejemplo C7, tócalo aquí y escríbelo. Te ahorras buscarlo en el plano."),
+                PasoGuia("asientos_continuar", "Cuando termines, toca aquí", "Ojo: el asiento se aparta hasta que confirmes o pagues. Si alguien lo gana antes, te avisamos para que elijas otro."),
+            ),
+        )
         Column(
             modifier = Modifier
                 .padding(relleno)
@@ -300,7 +326,7 @@ fun SeatMapScreen(
                 }
 
                 Spacer(Modifier.height(Espacio.m))
-                Leyenda()
+                Box(Modifier.objetivoDeGuia("asientos_leyenda")) { Leyenda() }
                 Spacer(Modifier.height(Espacio.m))
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     BotonSecundario(
@@ -308,9 +334,10 @@ fun SeatMapScreen(
                         onClick = { eligiendoPorNumero = true },
                         icono = Icons.Filled.EventSeat,
                         habilitado = elegidos.size < objetivo,
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).objetivoDeGuia("asientos_por_numero"),
                     )
                     Spacer(Modifier.width(Espacio.s))
+                    Box(Modifier.objetivoDeGuia("asientos_zoom")) {
                     ControlesZoom(
                         puedeAlejar = tamano > TAMANO_MIN,
                         puedeAcercar = tamano < TAMANO_MAX,
@@ -318,23 +345,28 @@ fun SeatMapScreen(
                         onAcercar = { tamano = (tamano + PASO_ZOOM).coerceAtMost(TAMANO_MAX) },
                         onRestablecer = { tamano = TAMANO_INICIAL },
                     )
+                    }
                 }
             }
 
             Spacer(Modifier.height(Espacio.l))
-            Escenario()
-            Spacer(Modifier.height(Espacio.l))
-
-            // Secciones en el orden en que fueron creadas
-            asientos.map { it.seccion }.distinct().forEach { seccion ->
+            // Secciones en el orden en que fueron creadas; el escenario y la primera son el objetivo de la guía «Elige tocando»
+            val secciones = asientos.map { it.seccion }.distinct()
+            secciones.forEachIndexed { indice, seccion ->
                 val deLaSeccion = asientos.filter { it.seccion == seccion }
-                SeccionAsientos(
-                    nombre = seccion,
-                    asientos = deLaSeccion,
-                    tamano = tamano.dp,
-                    seleccionados = seleccionados,
-                    onSeleccionar = ::alternar,
-                )
+                Column(modifier = if (indice == 0) Modifier.objetivoDeGuia("asientos_plano") else Modifier) {
+                    if (indice == 0) {
+                        Escenario()
+                        Spacer(Modifier.height(Espacio.l))
+                    }
+                    SeccionAsientos(
+                        nombre = seccion,
+                        asientos = deLaSeccion,
+                        tamano = tamano.dp,
+                        seleccionados = seleccionados,
+                        onSeleccionar = ::alternar,
+                    )
+                }
                 Spacer(Modifier.height(Espacio.xl))
             }
 

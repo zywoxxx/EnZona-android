@@ -28,7 +28,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.data.model.EstadoPago
+import com.uv.enzona.ui.components.EsperaDeCarga
+import com.uv.enzona.ui.components.ZonaDemostracion
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.model.BoletoDetalle
 import com.uv.enzona.ui.components.Aviso
 import com.uv.enzona.ui.components.BarraSuperiorEnZona
@@ -57,14 +62,27 @@ fun OrderSummaryScreen(
     onVerMisBoletos: () -> Unit,
     onVolverAInicio: () -> Unit,
 ) {
-    val orden = MockRepository.ordenes.find { it.id == ordenId } ?: return
-    val boletos = MockRepository.boletosDeOrden(ordenId)
-    val evento = boletos.firstOrNull()?.evento ?: MockRepository.obtenerEvento(orden.eventoId) ?: return
+    val carga = rememberCarga(ordenId) {
+        val repositorio = Repositorio.actual
+        val compra = repositorio.orden(ordenId)
+        compra to (compra.boletos.firstOrNull()?.evento ?: repositorio.evento(compra.orden.eventoId))
+    }
+    val cargado = carga.valor
+    if (cargado == null) {
+        EsperaDeCarga(carga, titulo = "Tu orden", onVolver = null, textoCargando = "Cargando tu orden…")
+        return
+    }
+    val (compra, evento) = cargado
+    val orden = compra.orden
+    val boletos = compra.boletos
     val n = boletos.size
+    // OXXO / SPEI: la orden existe pero los boletos se emiten cuando la pasarela confirma el pago
+    val pagoPendiente = compra.pago?.takeIf { it.estado == EstadoPago.PENDIENTE }
+    val operacion = rememberOperacion()
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
-        topBar = { BarraSuperiorEnZona(titulo = "Compra confirmada", onVolver = null) },
+        topBar = { BarraSuperiorEnZona(titulo = if (pagoPendiente != null) "Pago pendiente" else "Compra confirmada", onVolver = null) },
         bottomBar = {
             Column(Modifier.padding(horizontal = Espacio.margen, vertical = Espacio.m), verticalArrangement = Arrangement.spacedBy(Espacio.s)) {
                 BotonEnZona(texto = "Ver mis boletos", onClick = onVerMisBoletos)
@@ -79,18 +97,46 @@ fun OrderSummaryScreen(
             contentPadding = PaddingValues(horizontal = Espacio.margen, vertical = Espacio.s),
             verticalArrangement = Arrangement.spacedBy(Espacio.m),
         ) {
-            item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        Icons.Filled.CheckCircle, contentDescription = null,
-                        tint = EnZonaTema.semanticos.exito, modifier = Modifier.size(32.dp)
+            if (pagoPendiente != null) {
+                item {
+                    Aviso(
+                        titulo = "Tu orden está reservada",
+                        texto = "Paga con esta referencia para recibir tus boletos: ${pagoPendiente.referenciaPasarela ?: "—"}. " +
+                            "Tus lugares quedan apartados durante 24 horas.",
+                        tono = Tono.Aviso,
                     )
-                    Spacer(Modifier.width(Espacio.m))
-                    Text(
-                        if (n == 1) "Tu boleto está listo" else "Tus $n boletos están listos",
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground,
-                    )
+                }
+                item {
+                    ZonaDemostracion {
+                        Text(
+                            "La pasarela está simulada: no hay ningún cobro real. Este botón hace lo que haría el aviso " +
+                                "de la pasarela al recibir el pago.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(Espacio.s))
+                        BotonSecundario(
+                            texto = if (operacion.enCurso) "Confirmando…" else "Simular confirmación del pago",
+                            habilitado = !operacion.enCurso,
+                            onClick = { operacion.ejecutar<Any> { Repositorio.actual.confirmarPagoPendiente(pagoPendiente.id) } },
+                        )
+                        operacion.error?.let { Spacer(Modifier.height(Espacio.s)); Aviso(texto = it, tono = Tono.Error) }
+                    }
+                }
+            } else {
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Filled.CheckCircle, contentDescription = null,
+                            tint = EnZonaTema.semanticos.exito, modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(Modifier.width(Espacio.m))
+                        Text(
+                            if (n == 1) "Tu boleto está listo" else "Tus $n boletos están listos",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onBackground,
+                        )
+                    }
                 }
             }
             item {
@@ -102,8 +148,11 @@ fun OrderSummaryScreen(
                     FilaDato(Icons.Filled.LocationOn, evento.lugar, descripcionIcono = "Lugar")
                     Spacer(Modifier.height(Espacio.m))
                     Text(
-                        if (orden.total > 0) "Total pagado: ${Formato.importeMxn(orden.total)} · orden #${orden.id}"
-                        else "Sin cobro · orden #${orden.id}",
+                        when {
+                            pagoPendiente != null -> "Total a pagar: ${Formato.importeMxn(orden.total)} · orden #${orden.id}"
+                            orden.total > 0 -> "Total pagado: ${Formato.importeMxn(orden.total)} · orden #${orden.id}"
+                            else -> "Sin cobro · orden #${orden.id}"
+                        },
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -117,7 +166,7 @@ fun OrderSummaryScreen(
                     )
                 }
             }
-            item {
+            if (n > 0) item {
                 Text(
                     if (n == 1) "Tu boleto" else "Tus boletos · desliza para verlos",
                     style = MaterialTheme.typography.titleMedium,

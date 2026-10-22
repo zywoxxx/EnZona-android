@@ -1,0 +1,15 @@
+{
+  "name": "EnZona v3 · Importar mockups",
+  "id": "enzona-v3-mockups-importer",
+  "api": "1.0.0",
+  "main": "code.js",
+  "editorType": [
+    "figma"
+  ],
+  "documentAccess": "dynamic-page",
+  "networkAccess": {
+    "allowedDomains": [
+      "none"
+    ]
+  }
+}

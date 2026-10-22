@@ -44,4 +44,9 @@ object Formato {
         disponibles == 1 -> "1 lugar"
         else -> "$disponibles lugares"
     }
+
+    /** "350 m" por debajo de un kilómetro; "1.4 km" en adelante. */
+    fun distancia(km: Double): String =
+        if (km < 1.0) "${(km * 1000).toInt().coerceAtLeast(10) / 10 * 10} m"
+        else String.format(java.util.Locale.US, "%.1f km", km)
 }

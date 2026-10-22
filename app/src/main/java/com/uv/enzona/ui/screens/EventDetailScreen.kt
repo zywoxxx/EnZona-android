@@ -38,11 +38,19 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import com.uv.enzona.data.Guias
+import com.uv.enzona.ui.components.GuiaDePantalla
+import com.uv.enzona.ui.components.PasoGuia
+import com.uv.enzona.ui.components.objetivoDeGuia
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
-import com.uv.enzona.data.SessionManager
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.data.model.EstadoBoleto
+import com.uv.enzona.ui.components.EsperaDeCarga
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.model.EstadoEvento
 import com.uv.enzona.data.model.Evento
 import com.uv.enzona.data.model.SolicitudCompra
@@ -83,31 +91,46 @@ fun EventDetailScreen(
     onIrAPago: (eventoId: Long, tipoId: Long?, cantidad: Int) -> Unit,
     onVerBoletos: (() -> Unit)? = null,
 ) {
-    // Se lee de la lista observable para que el aforo se refresque al comprar
-    val evento = MockRepository.eventos.find { it.id == eventoId } ?: return
-    val tipos = MockRepository.tiposDe(eventoId)
-    val organizador = MockRepository.usuarios.find { it.id == evento.organizadorId }?.nombre
+    // Evento, tipos de boleto y boletos propios se piden juntos; se vuelven a pedir al comprar
+    val carga = rememberCarga(eventoId) {
+        val repositorio = Repositorio.actual
+        val evento = repositorio.evento(eventoId)
+        DatosDetalle(
+            evento = evento,
+            tipos = repositorio.tiposDe(eventoId),
+            boletosPropios = repositorio.misBoletos().count { it.evento.id == eventoId && it.estado != EstadoBoleto.CANCELADO },
+        )
+    }
+    val datos = carga.valor
+    if (datos == null) {
+        EsperaDeCarga(carga, titulo = "", onVolver = onVolver, textoCargando = "Cargando el evento…")
+        return
+    }
+    val evento = datos.evento
+    val tipos = datos.tipos
+    val organizador = evento.organizadorNombre
 
     var tipoSeleccionadoId by rememberSaveable { mutableStateOf(tipos.firstOrNull { it.cantidadDisponible > 0 }?.id) }
     val tipoSeleccionado = tipos.find { it.id == tipoSeleccionadoId } ?: tipos.firstOrNull()
 
-    val usuarioId = SessionManager.usuarioId
-    val boletosPropios = MockRepository.boletosDe(usuarioId).count { it.evento.id == eventoId && it.estado.name != "CANCELADO" }
+    val boletosPropios = datos.boletosPropios
     val yaConfirmoGratis = !evento.esDePago && boletosPropios > 0
-    val asientosLibres = if (evento.requiereAsiento) MockRepository.asientosLibres(eventoId) else 0
+    // `disponibles` ya viene acotado por los asientos libres cuando el evento tiene plano
+    val asientosLibres = if (evento.requiereAsiento) evento.disponibles else 0
 
-    // Cantidad: en eventos de pago hasta la disponibilidad real; en gratuitos siempre 1
-    val maximo = if (evento.esDePago) MockRepository.cupoDisponible(eventoId, tipoSeleccionado?.id) else 1
+    // Cantidad: en eventos de pago hasta la disponibilidad real (la menor entre el evento y el tipo); en gratuitos siempre 1.
+    // El servidor la vuelve a validar al ordenar.
+    val maximo = if (evento.esDePago) minOf(evento.disponibles, tipoSeleccionado?.cantidadDisponible ?: evento.disponibles).coerceAtLeast(0) else 1
     var cantidadElegida by rememberSaveable { mutableIntStateOf(1) }
     val cantidad = cantidadElegida.coerceIn(1, maximo.coerceAtLeast(1))
     // Si al cambiar de tipo la cantidad excede el nuevo máximo, se revalida (sin selecciones ocultas)
     if (cantidadElegida != cantidad) cantidadElegida = cantidad
 
     var confirmando by rememberSaveable { mutableStateOf(false) }
-    var procesando by remember { mutableStateOf(false) }
+    val operacion = rememberOperacion()
+    val procesando = operacion.enCurso
     var errorConfirmacion by remember { mutableStateOf<String?>(null) }
     val claveOperacion = rememberSaveable { UUID.randomUUID().toString() }
-    val alcance = rememberCoroutineScope()
 
     val cancelado = evento.estado == EstadoEvento.CANCELADO
     val realizado = evento.estado == EstadoEvento.REALIZADO
@@ -124,31 +147,44 @@ fun EventDetailScreen(
             error = errorConfirmacion,
             onCancelar = { if (!procesando) { confirmando = false; errorConfirmacion = null } },
             onConfirmar = {
-                if (procesando) return@DialogoConfirmarAsistencia
-                procesando = true
                 errorConfirmacion = null
-                alcance.launch {
-                    delay(500) // simula la ida y vuelta al servidor; la regla de aforo vive en el repositorio
-                    MockRepository.comprar(
-                        usuarioId,
-                        SolicitudCompra(eventoId = evento.id, tipoBoletoId = null, cantidad = 1, claveOperacion = claveOperacion),
-                    ).onSuccess { compra ->
-                        procesando = false
+                operacion.ejecutar(
+                    alTerminar = { compra: com.uv.enzona.data.model.CompraRealizada ->
                         confirmando = false
                         onBoletoEmitido(compra.boletos.first().id)
-                    }.onFailure {
-                        procesando = false
-                        errorConfirmacion = it.message ?: "No se pudo registrar la confirmación."
-                    }
+                    },
+                    alFallar = { errorConfirmacion = it.message ?: "No se pudo registrar la confirmación." },
+                ) {
+                    // La regla de aforo y la de «una confirmación por persona» las aplica el servidor
+                    Repositorio.actual.comprar(
+                        SolicitudCompra(eventoId = evento.id, tipoBoletoId = null, cantidad = 1, claveOperacion = claveOperacion),
+                        pago = null,
+                    )
                 }
             },
         )
     }
 
+    // Guía de la primera vez: solo cuando se puede comprar o confirmar (en un evento cancelado no hay nada que explicar)
+    val mostrarTipos = evento.esDePago && tipos.isNotEmpty() && !cancelado && !realizado
+    GuiaDePantalla(
+        clave = Guias.Clave.DETALLE_EVENTO,
+        activa = !cancelado && !realizado && !yaConfirmoGratis && maximo > 0,
+        pasos = buildList {
+            if (mostrarTipos) add(PasoGuia("detalle_tipos", "Elige tu tipo de boleto", "Hay varios tipos, cada uno con su precio. Desliza hacia un lado para verlos todos y toca el que quieras."))
+            add(PasoGuia("detalle_cantidad", "¿Cuántos boletos quieres?", "Usa + y − para elegir la cantidad. ¿Vas con amigos? Cada quien tendrá su propio boleto con su código."))
+            add(PasoGuia("detalle_accion", if (evento.esDePago) "Con este botón compras" else "Con este botón apartas tu lugar",
+                if (evento.requiereAsiento) "Este evento tiene asientos numerados. Al tocar el botón verás el plano del lugar para escoger dónde sentarte."
+                else if (evento.esDePago) "Te lleva a pagar con tu tarjeta. Lo que ves aquí es lo que pagas, sin cargos escondidos."
+                else "Este evento es gratis. Toca el botón y listo: tu boleto queda en «Mis boletos». Solo se aparta un lugar por persona."))
+        },
+    )
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = { BarraSuperiorEnZona(titulo = "", onVolver = onVolver) },
         bottomBar = {
+            Box(Modifier.objetivoDeGuia("detalle_accion")) {
             BarraAccion(
                 textoBoton = when {
                     cancelado -> "Evento cancelado"
@@ -175,6 +211,7 @@ fun EventDetailScreen(
                     }
                 },
             )
+            }
         },
     ) { relleno ->
         Column(
@@ -189,6 +226,7 @@ fun EventDetailScreen(
                 nombre = evento.nombre,
                 categoria = evento.categoria,
                 fecha = evento.fecha,
+                imagenUrl = evento.imagenUrl,
                 mostrarFecha = false,
             )
 
@@ -279,6 +317,7 @@ fun EventDetailScreen(
                     LazyRow(
                         horizontalArrangement = Arrangement.spacedBy(Espacio.s),
                         contentPadding = androidx.compose.foundation.layout.PaddingValues(end = Espacio.l),
+                        modifier = Modifier.objetivoDeGuia("detalle_tipos"),
                     ) {
                         items(tipos, key = { it.id }) { tipo ->
                             TarjetaTipoBoleto(
@@ -297,7 +336,7 @@ fun EventDetailScreen(
                         )
                     }
                 }
-                TarjetaEnZona {
+                TarjetaEnZona(modifier = Modifier.objetivoDeGuia("detalle_cantidad")) {
                     SelectorCantidad(
                         cantidad = cantidad,
                         maximo = maximo,
@@ -333,6 +372,8 @@ fun EventDetailScreen(
 // ==================================================================
 //  Piezas
 // ==================================================================
+
+private data class DatosDetalle(val evento: Evento, val tipos: List<TipoBoleto>, val boletosPropios: Int)
 
 /** Tarjeta de tipo de boleto para el carrusel horizontal (ancho fijo, alto igual entre tarjetas). */
 @Composable

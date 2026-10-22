@@ -29,11 +29,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.uv.enzona.data.Guias
+import com.uv.enzona.ui.components.GuiaDePantalla
+import com.uv.enzona.ui.components.PasoGuia
+import com.uv.enzona.ui.components.objetivoDeGuia
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.Carga
+import com.uv.enzona.ui.components.IndicadorCarga
+import com.uv.enzona.ui.components.rememberCarga
 import com.uv.enzona.data.SessionManager
 import com.uv.enzona.data.model.EstadoEvento
 import com.uv.enzona.data.model.Evento
@@ -51,17 +59,28 @@ import com.uv.enzona.util.FechaEvento
 /** Panel del organizador: sus eventos con conteos (RF-17). */
 @Composable
 fun OrganizerHomeScreen(onNuevoEvento: () -> Unit, onEventoClick: (Long) -> Unit) {
-    val organizadorId = SessionManager.usuarioId
-    val eventos = MockRepository.eventosDe(organizadorId)
+    val carga = rememberCarga { Repositorio.actual.misEventos() }
+    val eventos = carga.valor.orEmpty()
 
     val totalVendidos = eventos.sumOf { it.vendidos }
     val totalIngresos = eventos.sumOf { it.vendidos * it.precioDesde }
     val publicados = eventos.count { it.estado == EstadoEvento.PUBLICADO }
 
+    GuiaDePantalla(
+        clave = Guias.Clave.ORGANIZADOR,
+        activa = carga.estado is Carga.Lista,
+        pasos = buildList {
+            add(PasoGuia("org_metricas", "Este es tu espacio de organizador", "De un vistazo ves cuántos eventos tienes publicados, cuánta gente va a ir y cuánto llevas vendido."))
+            if (eventos.isNotEmpty()) add(PasoGuia("org_evento", "Toca un evento para administrarlo", "Ahí ves cómo van las ventas y las entradas, eliges quién revisa los boletos en la puerta, y puedes editarlo o cancelarlo."))
+            add(PasoGuia("org_nuevo", "¿Quieres publicar un evento?", "Toca «Nuevo evento». Te pedimos una foto, la fecha, el lugar en el mapa y los boletos. En unos minutos está listo."))
+        },
+    )
+
     Scaffold(
         containerColor = MoradoFondo,
         floatingActionButton = {
             ExtendedFloatingActionButton(
+                modifier = Modifier.objetivoDeGuia("org_nuevo"),
                 onClick = onNuevoEvento,
                 containerColor = NaranjaAcento,
                 contentColor = com.uv.enzona.ui.theme.SobreNaranja,
@@ -84,16 +103,28 @@ fun OrganizerHomeScreen(onNuevoEvento: () -> Unit, onEventoClick: (Long) -> Unit
                 }
             }
             item {
-                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.objetivoDeGuia("org_metricas")) {
                     Metrica("Publicados", "$publicados", Modifier.weight(1f))
                     Metrica("Asistentes", "$totalVendidos", Modifier.weight(1f))
                     Metrica("Ingresos", "$${"%.0f".format(totalIngresos)}", Modifier.weight(1f))
                 }
             }
-            items(eventos, key = { it.id }) { evento ->
-                TarjetaEventoOrganizador(evento) { onEventoClick(evento.id) }
+            itemsIndexed(eventos, key = { _, evento -> evento.id }) { indice, evento ->
+                Box(if (indice == 0) Modifier.objetivoDeGuia("org_evento") else Modifier) {
+                    TarjetaEventoOrganizador(evento) { onEventoClick(evento.id) }
+                }
             }
-            if (eventos.isEmpty()) {
+            when (val estado = carga.estado) {
+                is Carga.Cargando -> item { IndicadorCarga("Cargando tus eventos…", Modifier.padding(vertical = 24.dp)) }
+                is Carga.Fallo -> item {
+                    Column {
+                        Text(estado.mensaje, color = com.uv.enzona.ui.theme.RojoError, modifier = Modifier.padding(top = 20.dp))
+                        androidx.compose.material3.TextButton(onClick = carga::recargar) { Text("Reintentar", color = NaranjaAcento) }
+                    }
+                }
+                is Carga.Lista -> Unit
+            }
+            if (carga.estado is Carga.Lista && eventos.isEmpty()) {
                 item {
                     Text(
                         "Aún no has creado eventos. Usa el botón «Nuevo evento» para publicar el primero.",

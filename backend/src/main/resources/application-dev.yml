@@ -1,0 +1,17 @@
+# Perfil de desarrollo: OTP visible en la respuesta (simulación), Swagger abierto
+# y confirmación simulada de pagos pendientes. Incluye el perfil `seed`.
+enzona:
+  otp:
+    devolver-en-respuesta: true
+  pagos:
+    confirmacion-simulada: true
+
+springdoc:
+  swagger-ui:
+    enabled: true
+  api-docs:
+    enabled: true
+
+logging:
+  level:
+    mx.uv.enzona: DEBUG

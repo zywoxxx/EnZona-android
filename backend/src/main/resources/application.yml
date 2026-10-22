@@ -1,0 +1,109 @@
+# =====================================================================
+# EnZona API · configuración común
+# Las credenciales NUNCA van aquí: se leen de variables de entorno o de
+# backend/.env (no versionado). Ver backend/.env.example.
+# =====================================================================
+spring:
+  application:
+    name: enzona-api
+  config:
+    # Permite `./mvnw spring-boot:run` leyendo backend/.env como archivo de propiedades
+    import:
+      - optional:file:.env[.properties]
+      - optional:file:backend/.env[.properties]
+      - optional:classpath:application-local.yml
+  profiles:
+    default: dev
+    group:
+      dev: seed
+  datasource:
+    url: ${ENZONA_DB_URL}
+    username: ${ENZONA_DB_USER}
+    password: ${ENZONA_DB_PASSWORD}
+    hikari:
+      # Aiven limita el servicio a 20 conexiones en total
+      maximum-pool-size: 5
+      minimum-idle: 1
+      connection-timeout: 20000
+      pool-name: enzona-pool
+      data-source-properties:
+        # Los enum de PostgreSQL se envían como texto sin tipo y el servidor los convierte
+        stringtype: unspecified
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none          # el esquema lo gobierna Flyway
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+  flyway:
+    enabled: true
+    baseline-on-migrate: true   # las tablas del esquema v2 ya existían en Aiven
+    baseline-version: 1
+    baseline-description: Esquema v2 ya existente
+    locations: classpath:db/migration
+  jackson:
+    default-property-inclusion: non_null
+    time-zone: UTC
+    serialization:
+      write-dates-as-timestamps: false
+  mvc:
+    problemdetails:
+      enabled: true
+  threads:
+    virtual:
+      enabled: false
+
+server:
+  port: 8080
+  error:
+    include-message: never
+    include-stacktrace: never
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+enzona:
+  jwt:
+    secreto: ${ENZONA_JWT_SECRET}
+    horas-expiracion: 12
+  hmac:
+    secreto: ${ENZONA_HMAC_SECRET}
+  curp:
+    # Clave AES-256 en hexadecimal (64 caracteres). Cifra la CURP en reposo (RNF-03)
+    clave: ${ENZONA_CURP_KEY}
+  cors:
+    origenes: ${ENZONA_CORS_ORIGINS:http://localhost:5173}
+  otp:
+    minutos-vigencia: 10
+    # Solo en dev se devuelve el OTP en la respuesta (simulación de correo/SMS)
+    devolver-en-respuesta: false
+  zona-horaria: America/Mexico_City
+  cancelacion:
+    porcentaje-comision: 10
+  recordatorios:
+    dias-antes: 7
+    cron: "0 0 8 * * *"
+  pagos:
+    # Permite confirmar pagos pendientes desde la API (simulación del webhook)
+    confirmacion-simulada: false
+
+logging:
+  level:
+    org.flywaydb: INFO
+    mx.uv.enzona: INFO

@@ -1,0 +1,146 @@
+[
+ {
+  "file": "00_portada.svg",
+  "name": "Portada",
+  "desc": "EnZona v3 · Mockups",
+  "section": "Portada",
+  "w": 1200,
+  "h": 640
+ },
+ {
+  "file": "00_guia_de_estilo.svg",
+  "name": "Guía de estilo",
+  "desc": "Paleta v2, tipografía y componentes",
+  "section": "Portada",
+  "w": 1200,
+  "h": 780
+ },
+ {
+  "file": "01_detalle_mapa_como_llegar.svg",
+  "name": "01 · Detalle mapa como llegar",
+  "desc": "Detalle del evento · minimapa y «Cómo llegar»",
+  "section": "Ubicación en mapa (RF-08 · RF-19)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "02_dialogo_cancelar_pago_comision.svg",
+  "name": "02 · Dialogo cancelar pago comision",
+  "desc": "Diálogo del organizador · cancelar evento de pago (reembolso $360 · comisión $36)",
+  "section": "Cancelación de eventos (RF-14)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "03_panel_evento_cancelado_cargo.svg",
+  "name": "03 · Panel evento cancelado cargo",
+  "desc": "Panel del evento cancelado · cargo pendiente al organizador",
+  "section": "Cancelación de eventos (RF-14)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "04_form_fecha_hora.svg",
+  "name": "04 · Form fecha hora",
+  "desc": "Nuevo evento · selectores de fecha y hora (sin texto libre)",
+  "section": "Fecha y hora con selectores (RF-08)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "05_calendario_sin_pasado.svg",
+  "name": "05 · Calendario sin pasado",
+  "desc": "Calendario Material 3 · fechas pasadas deshabilitadas",
+  "section": "Fecha y hora con selectores (RF-08)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "06_hora_24h.svg",
+  "name": "06 · Hora 24h",
+  "desc": "Selector de hora en 24 h con entrada numérica",
+  "section": "Fecha y hora con selectores (RF-08)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "07_mapa_marcador.svg",
+  "name": "07 · Mapa marcador",
+  "desc": "Selector de ubicación (osmdroid) · marcador y dirección aproximada",
+  "section": "Ubicación en mapa (RF-08 · RF-19)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "08_dialogo_dejar_organizador.svg",
+  "name": "08 · Dialogo dejar organizador",
+  "desc": "Perfil · diálogo «Dejar de ser organizador»",
+  "section": "Rol de organizador (RF-04)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "09_mis_boletos_evento_cancelado.svg",
+  "name": "09 · Mis boletos evento cancelado",
+  "desc": "Mis boletos · «Evento cancelado · reembolso en proceso»",
+  "section": "Cancelación de eventos (RF-14)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "10_boleto_evento_cancelado.svg",
+  "name": "10 · Boleto evento cancelado",
+  "desc": "Tu boleto · QR anulado por evento cancelado",
+  "section": "Cancelación de eventos (RF-14)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "11_dialogo_convertirse.svg",
+  "name": "11 · Dialogo convertirse",
+  "desc": "Perfil · diálogo «¿Convertirte en organizador?»",
+  "section": "Rol de organizador (RF-04)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "12_snackbar_ahora_organizador.svg",
+  "name": "12 · Snackbar ahora organizador",
+  "desc": "Inicio con pestaña «Mis eventos» y Snackbar «Ahora eres organizador»",
+  "section": "Rol de organizador (RF-04)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "13_validador_evento_cancelado.svg",
+  "name": "13 · Validador evento cancelado",
+  "desc": "Validador · QR rechazado con «Evento cancelado»",
+  "section": "Cancelación de eventos (RF-14)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "14_admin_dialogo_motivo.svg",
+  "name": "14 · Admin dialogo motivo",
+  "desc": "Administración · cancelación por moderación, motivo obligatorio (botón deshabilitado)",
+  "section": "Cancelación administrativa (RF-18)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "15_admin_motivo_capturado.svg",
+  "name": "15 · Admin motivo capturado",
+  "desc": "Administración · motivo capturado, botón habilitado",
+  "section": "Cancelación administrativa (RF-18)",
+  "w": 412,
+  "h": 917
+ },
+ {
+  "file": "16_admin_resultado.svg",
+  "name": "16 · Admin resultado",
+  "desc": "Administración · evento cancelado por moderación (sin comisión)",
+  "section": "Cancelación administrativa (RF-18)",
+  "w": 412,
+  "h": 917
+ }
+]

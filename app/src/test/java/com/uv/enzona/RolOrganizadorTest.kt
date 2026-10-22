@@ -45,7 +45,7 @@ class RolOrganizadorTest {
         val u = usuarioAsistente()
         SessionManager.iniciarSesion(u)
         MockRepository.activarRolOrganizador(u.id)
-        SessionManager.refrescar()
+        kotlinx.coroutines.runBlocking { SessionManager.refrescar() }   // vuelve a leer la cuenta del repositorio
         assertTrue(Rol.ORGANIZADOR in SessionManager.usuario!!.roles)
         assertTrue(Rol.ASISTENTE in SessionManager.usuario!!.roles)   // conserva asistente
         SessionManager.cerrarSesion()
@@ -61,7 +61,7 @@ class RolOrganizadorTest {
         assertNull(MockRepository.motivoNoPuedeDejarOrganizador(u.id))
         val r = MockRepository.dejarRolOrganizador(u.id)
         assertTrue(r.isSuccess)
-        SessionManager.refrescar()
+        kotlinx.coroutines.runBlocking { SessionManager.refrescar() }   // vuelve a leer la cuenta del repositorio
         assertEquals(setOf(Rol.ASISTENTE), SessionManager.usuario!!.roles)
         assertFalse(SessionManager.accesoPersonal)   // ya no es personal: vuelve a Inicio
         SessionManager.cerrarSesion()

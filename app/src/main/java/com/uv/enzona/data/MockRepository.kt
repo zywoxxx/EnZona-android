@@ -99,10 +99,10 @@ object MockRepository {
     /** OTP pendiente por usuario (en producción se envía por correo/SMS). */
     private val otpPendientes = mutableMapOf<Long, String>()
 
-    // ---- Preferencias de zona (enfoque hiperlocal del proyecto) ----
-    val ciudad = mutableStateOf("Orizaba, Veracruz")
-    val pais = mutableStateOf("México")
-    val contenidoPorUbicacion = mutableStateOf(true)
+    // ---- Preferencias de zona: viven en `Preferencias` (son del teléfono, no del repositorio) ----
+    val ciudad get() = Preferencias.ciudad
+    val pais get() = Preferencias.pais
+    val contenidoPorUbicacion get() = Preferencias.contenidoPorUbicacion
 
     /** Modo sin conexión del validador (RNF-08). */
     val modoOffline = mutableStateOf(false)

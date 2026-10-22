@@ -26,8 +26,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
-import com.uv.enzona.data.SessionManager
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.Carga
+import com.uv.enzona.ui.components.IndicadorCarga
+import com.uv.enzona.ui.components.rememberCarga
 import com.uv.enzona.data.model.BoletoDetalle
 import com.uv.enzona.data.model.EstadoBoleto
 import com.uv.enzona.ui.components.EstadoVacio
@@ -48,9 +50,17 @@ import androidx.compose.material.icons.filled.EventBusy
  */
 @Composable
 fun TicketsScreen(onBoletoClick: (Long) -> Unit, onExplorar: (() -> Unit)? = null) {
-    val boletos = MockRepository.boletosDe(SessionManager.usuarioId)
+    val carga = rememberCarga { Repositorio.actual.misBoletos() }
+    val boletos = carga.valor.orEmpty()
     val vigentes = boletos.filter { it.estado == EstadoBoleto.VALIDO }
     val anteriores = boletos.filter { it.estado != EstadoBoleto.VALIDO }
+    // "k de N": posición de cada boleto dentro de su orden
+    val porOrden = boletos.groupBy { it.orden.id }.mapValues { (_, lista) -> lista.sortedBy { it.id } }
+    fun posicionEnOrden(detalle: BoletoDetalle): Pair<Int, Int>? {
+        val hermanos = porOrden[detalle.orden.id].orEmpty()
+        if (hermanos.size <= 1) return null
+        return (hermanos.indexOfFirst { it.id == detalle.id } + 1) to hermanos.size
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -60,7 +70,20 @@ fun TicketsScreen(onBoletoClick: (Long) -> Unit, onExplorar: (() -> Unit)? = nul
         item(key = "titulo") {
             Text("Mis boletos", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         }
-        if (boletos.isEmpty()) {
+        when (val estado = carga.estado) {
+            is Carga.Cargando -> item(key = "cargando") { IndicadorCarga("Cargando tus boletos…", Modifier.padding(vertical = Espacio.xl)) }
+            is Carga.Fallo -> item(key = "fallo") {
+                EstadoVacio(
+                    icono = Icons.Filled.ConfirmationNumber,
+                    titulo = if (estado.sinConexion) "Sin conexión con el servidor" else "No se pudieron cargar tus boletos",
+                    texto = estado.mensaje,
+                    textoAccion = "Reintentar",
+                    onAccion = carga::recargar,
+                )
+            }
+            is Carga.Lista -> Unit
+        }
+        if (carga.estado is Carga.Lista && boletos.isEmpty()) {
             item(key = "vacio") {
                 EstadoVacio(
                     icono = Icons.Filled.ConfirmationNumber,
@@ -92,12 +115,6 @@ private fun Subtitulo(texto: String, cantidad: Int) {
     )
 }
 
-/** "k de N" cuando la orden tiene más de un boleto; null si es único. */
-private fun posicionEnOrden(detalle: BoletoDetalle): Pair<Int, Int>? {
-    val hermanos = MockRepository.boletosDeOrden(detalle.orden.id)
-    if (hermanos.size <= 1) return null
-    return (hermanos.indexOfFirst { it.id == detalle.id } + 1) to hermanos.size
-}
 
 /** Fila de boleto: bloque de fecha, datos y estado. */
 @Composable

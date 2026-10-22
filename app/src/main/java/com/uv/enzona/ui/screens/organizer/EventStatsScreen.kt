@@ -35,11 +35,24 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import com.uv.enzona.data.Guias
+import com.uv.enzona.ui.components.GuiaDePantalla
+import com.uv.enzona.ui.components.PasoGuia
+import com.uv.enzona.ui.components.objetivoDeGuia
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.input.KeyboardType
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.PersonalAcceso
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.data.model.BoletoDetalle
+import com.uv.enzona.data.model.CargoOrganizador
+import com.uv.enzona.data.model.Evento
+import com.uv.enzona.data.model.PoliticaCancelacion
+import com.uv.enzona.ui.components.EsperaDeCarga
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.model.EstadoBoleto
 import com.uv.enzona.data.model.EstadoEvento
 import com.uv.enzona.ui.components.BotonEnZona
@@ -65,21 +78,54 @@ fun EventStatsScreen(
     onVolver: () -> Unit,
     onEditar: (Long) -> Unit,
 ) {
-    val evento = MockRepository.eventos.find { it.id == eventoId } ?: return
-    val boletos = MockRepository.boletosDeEvento(eventoId)
+    val carga = rememberCarga(eventoId) {
+        val repositorio = Repositorio.actual
+        val evento = repositorio.evento(eventoId)
+        DatosPanel(
+            evento = evento,
+            boletos = repositorio.boletosDeEvento(eventoId),
+            // Política de cancelación (RF-14): la calcula el servidor; la pantalla solo la muestra
+            politica = runCatching { repositorio.politicaCancelacion(eventoId, administrativa = false) }.getOrNull(),
+            cargos = if (repositorio.capacidades.cargosOrganizador) {
+                runCatching { repositorio.cargosDeOrganizador() }.getOrDefault(emptyList()).filter { it.eventoId == eventoId }
+            } else emptyList(),
+            personal = runCatching { repositorio.personalDeAcceso(eventoId) }.getOrDefault(emptyList()),
+        )
+    }
+    val datos = carga.valor
+    if (datos == null) {
+        EsperaDeCarga(carga, titulo = "Panel del evento", onVolver = onVolver, textoCargando = "Cargando el panel…")
+        return
+    }
+    val evento = datos.evento
+    val boletos = datos.boletos
+    val vigentes = boletos.filter { it.estado == EstadoBoleto.VALIDO || it.estado == EstadoBoleto.USADO }
     val validados = boletos.count { it.estado == EstadoBoleto.USADO }
-    val ingresos = evento.vendidos * evento.precioDesde
+    // Ingresos: suma de lo que costó cada boleto vigente (el precio es el de su tipo)
+    val ingresos = vigentes.sumOf { it.tipoBoleto?.precio ?: 0.0 }
     var confirmarCancelacion by remember { mutableStateOf(false) }
     var aviso by remember { mutableStateOf<String?>(null) }
     var errorCancelacion by remember { mutableStateOf<String?>(null) }
-    var procesandoCancelacion by remember { mutableStateOf(false) }
-    // Política de cancelación (RF-14, v3): única fuente de verdad, calculada por el modelo
-    val politica = MockRepository.politicaCancelacionDe(eventoId)
-    val cargos = MockRepository.cargosOrganizador.filter { it.eventoId == eventoId }
+    val operacion = rememberOperacion()
+    val procesandoCancelacion = operacion.enCurso
+    val politica = datos.politica
+    val cargos = datos.cargos
     val yaComenzo = !evento.fecha.isAfter(FechaEvento.ahora())
 
     val ocupacion = if (evento.aforo > 0) evento.vendidos.toFloat() / evento.aforo else 0f
     val asistencia = if (evento.vendidos > 0) validados.toFloat() / evento.vendidos else 0f
+
+    val puedeCancelar = evento.estado != EstadoEvento.CANCELADO && evento.estado != EstadoEvento.REALIZADO && politica != null
+    GuiaDePantalla(
+        clave = Guias.Clave.PANEL_EVENTO,
+        pasos = buildList {
+            add(PasoGuia("panel_metricas", "Así va tu evento", "Cuántas personas tienen boleto, cuántas ya entraron y cuánto llevas vendido. Abajo ves qué tan lleno está."))
+            add(PasoGuia("panel_boletos", "Quién tiene boleto", "Aquí aparece cada boleto vendido o apartado, con su estado: vigente, usado o cancelado."))
+            add(PasoGuia("panel_personal", "¿Quién revisa en la puerta?", "Escribe el correo de la persona que va a escanear los boletos y desígnala como validador. Entrará a la app con su propia cuenta y solo verá este evento."))
+            if (evento.estado != EstadoEvento.CANCELADO) add(PasoGuia("panel_editar", "¿Hay que cambiar algo?", "Con el lápiz editas el evento: descripción, portada, lugar… Si ya hay boletos vendidos y cambias la fecha, te pedimos confirmarlo."))
+            if (puedeCancelar) add(PasoGuia("panel_cancelar", "Si tienes que cancelar", "Este botón cancela el evento y devuelve el dinero a los asistentes. En eventos de pago se cobra una pequeña comisión; te la mostramos antes de confirmar."))
+        },
+    )
 
     Scaffold(
         containerColor = MoradoFondo,
@@ -93,7 +139,7 @@ fun EventStatsScreen(
                 },
                 actions = {
                     if (evento.estado != EstadoEvento.CANCELADO) {
-                        IconButton(onClick = { onEditar(eventoId) }) {
+                        IconButton(onClick = { onEditar(eventoId) }, modifier = Modifier.objetivoDeGuia("panel_editar")) {
                             Icon(Icons.Filled.Edit, "Editar", tint = NaranjaAcento)
                         }
                     }
@@ -120,7 +166,7 @@ fun EventStatsScreen(
 
             Spacer(Modifier.height(20.dp))
 
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.objetivoDeGuia("panel_metricas")) {
                 Tarjeta("Asistentes", "${evento.vendidos}", Modifier.weight(1f))
                 Tarjeta("Validados", "$validados", Modifier.weight(1f))
                 Tarjeta("Ingresos", "$${"%.0f".format(ingresos)}", Modifier.weight(1f))
@@ -132,7 +178,7 @@ fun EventStatsScreen(
             Barra("Asistencia registrada en puerta", "$validados / ${evento.vendidos}", asistencia, VerdeOk)
 
             Spacer(Modifier.height(24.dp))
-            Text("Boletos emitidos", style = MaterialTheme.typography.titleMedium, color = TextoPrincipal)
+            Text("Boletos emitidos", style = MaterialTheme.typography.titleMedium, color = TextoPrincipal, modifier = Modifier.objetivoDeGuia("panel_boletos"))
             Spacer(Modifier.height(8.dp))
             if (boletos.isEmpty()) {
                 Text("Todavía no hay boletos emitidos.", color = TextoSecundario)
@@ -170,7 +216,7 @@ fun EventStatsScreen(
             }
 
             Spacer(Modifier.height(24.dp))
-            PersonalDeAcceso()
+            Box(Modifier.objetivoDeGuia("panel_personal")) { PersonalDeAcceso(eventoId, datos.personal) }
 
             Spacer(Modifier.height(24.dp))
 
@@ -197,10 +243,13 @@ fun EventStatsScreen(
 
             if (evento.estado == EstadoEvento.BORRADOR) {
                 OutlinedButton(
+                    enabled = !operacion.enCurso,
                     onClick = {
-                        MockRepository.publicarEvento(eventoId)
-                            .onSuccess { aviso = "El evento ya es visible para los asistentes." }
-                            .onFailure { aviso = null; errorCancelacion = it.message }
+                        errorCancelacion = null
+                        operacion.ejecutar(
+                            alTerminar = { _: Evento -> aviso = "El evento ya es visible para los asistentes." },
+                            alFallar = { aviso = null; errorCancelacion = it.message },
+                        ) { Repositorio.actual.publicarEvento(eventoId) }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -212,11 +261,16 @@ fun EventStatsScreen(
                 Spacer(Modifier.height(10.dp))
             }
 
-            if (evento.estado == EstadoEvento.PUBLICADO && yaComenzo) {
+            // Con la API de EnZona el servidor marca solo los eventos terminados: no se ofrece el botón
+            if (evento.estado == EstadoEvento.PUBLICADO && yaComenzo && Repositorio.actual.capacidades.marcarRealizado) {
                 OutlinedButton(
+                    enabled = !operacion.enCurso,
                     onClick = {
-                        MockRepository.marcarRealizado(eventoId)
-                        aviso = "El evento quedó marcado como finalizado."
+                        errorCancelacion = null
+                        operacion.ejecutar(
+                            alTerminar = { _: Evento -> aviso = "El evento quedó marcado como finalizado." },
+                            alFallar = { aviso = null; errorCancelacion = it.message },
+                        ) { Repositorio.actual.marcarRealizado(eventoId) }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -234,7 +288,8 @@ fun EventStatsScreen(
                     enabled = politica.permitida,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(52.dp),
+                        .height(52.dp)
+                        .objetivoDeGuia("panel_cancelar"),
                     shape = RoundedCornerShape(16.dp)
                 ) {
                     Text(
@@ -270,20 +325,16 @@ fun EventStatsScreen(
             error = errorCancelacion,
             onCancelar = { if (!procesandoCancelacion) { confirmarCancelacion = false; errorCancelacion = null } },
             onConfirmar = { motivo ->
-                procesandoCancelacion = true
-                MockRepository.cancelarEvento(
-                    eventoId = eventoId,
-                    ejecutadoPor = com.uv.enzona.data.SessionManager.usuarioId,
-                    motivo = motivo,
-                    aceptaComision = politica.cobraComision,
-                ).onSuccess { r ->
-                    procesandoCancelacion = false
-                    confirmarCancelacion = false
-                    aviso = "Evento cancelado. Se anularon ${r.boletosAnulados} boletos y se avisó a ${r.asistentesNotificados} asistentes." +
-                        (if (r.comision.signum() > 0) " Comisión: ${com.uv.enzona.util.Formato.importeMxn(r.comision.toDouble())}." else "")
-                }.onFailure {
-                    procesandoCancelacion = false
-                    errorCancelacion = it.message
+                errorCancelacion = null
+                operacion.ejecutar(
+                    alTerminar = { r: com.uv.enzona.data.model.ResultadoCancelacion ->
+                        confirmarCancelacion = false
+                        aviso = "Evento cancelado. Se anularon ${r.boletosAnulados} boletos y se avisó a ${r.asistentesNotificados} asistentes." +
+                            (if (r.comision.signum() > 0) " Comisión: ${com.uv.enzona.util.Formato.importeMxn(r.comision.toDouble())}." else "")
+                    },
+                    alFallar = { errorCancelacion = it.message },
+                ) {
+                    Repositorio.actual.cancelarEvento(eventoId, motivo = motivo, aceptaComision = politica.cobraComision, administrativa = false)
                 }
             },
         )
@@ -296,11 +347,11 @@ fun EventStatsScreen(
  * fila correspondiente en `usuario_rol`.
  */
 @Composable
-private fun PersonalDeAcceso() {
+private fun PersonalDeAcceso(eventoId: Long, validadores: List<PersonalAcceso>) {
     var correo by remember { mutableStateOf("") }
     var mensaje by remember { mutableStateOf<String?>(null) }
     var esError by remember { mutableStateOf(false) }
-    val validadores = MockRepository.personalDeAcceso()
+    val operacion = rememberOperacion()
 
     Column(
         modifier = Modifier
@@ -315,7 +366,7 @@ private fun PersonalDeAcceso() {
         }
         Spacer(Modifier.height(4.dp))
         Text(
-            "Quien designes podrá escanear los códigos QR en la puerta desde su propia cuenta.",
+            "Quien designes podrá escanear los códigos QR de este evento en la puerta, desde su propia cuenta.",
             color = TextoSecundario, style = MaterialTheme.typography.bodyMedium
         )
 
@@ -330,17 +381,21 @@ private fun PersonalDeAcceso() {
         BotonEnZona(
             texto = "Designar como validador",
             habilitado = correo.isNotBlank(),
+            cargando = operacion.enCurso,
             onClick = {
-                MockRepository.designarValidador(correo)
-                    .onSuccess {
-                        mensaje = "${it.nombre} ya puede validar accesos."
+                val buscado = correo.trim()
+                operacion.ejecutar(
+                    alTerminar = { lista: List<PersonalAcceso> ->
+                        val nombre = lista.firstOrNull { it.correo.equals(buscado, ignoreCase = true) }?.nombre ?: buscado
+                        mensaje = "$nombre ya puede validar accesos."
                         esError = false
                         correo = ""
-                    }
-                    .onFailure {
+                    },
+                    alFallar = {
                         mensaje = it.message
                         esError = true
-                    }
+                    },
+                ) { Repositorio.actual.designarValidador(eventoId, buscado) }
             }
         )
 
@@ -368,7 +423,14 @@ private fun PersonalDeAcceso() {
                         Text(persona.nombre, color = TextoPrincipal, style = MaterialTheme.typography.bodyMedium)
                         Text(persona.correo, color = TextoSecundario, style = MaterialTheme.typography.labelMedium)
                     }
-                    TextButton(onClick = { MockRepository.quitarValidador(persona.id) }) {
+                    TextButton(
+                        enabled = !operacion.enCurso,
+                        onClick = {
+                            operacion.ejecutar<Any>(alFallar = { mensaje = it.message; esError = true }) {
+                                Repositorio.actual.quitarValidador(eventoId, persona.usuarioId)
+                            }
+                        },
+                    ) {
                         Text("Quitar", color = RojoError, style = MaterialTheme.typography.labelMedium)
                     }
                 }
@@ -376,6 +438,14 @@ private fun PersonalDeAcceso() {
         }
     }
 }
+
+private data class DatosPanel(
+    val evento: Evento,
+    val boletos: List<BoletoDetalle>,
+    val politica: PoliticaCancelacion?,
+    val cargos: List<CargoOrganizador>,
+    val personal: List<PersonalAcceso>,
+)
 
 @Composable
 private fun Tarjeta(etiqueta: String, valor: String, modifier: Modifier = Modifier) {

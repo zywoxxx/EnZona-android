@@ -41,6 +41,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.uv.enzona.data.Guias
+import com.uv.enzona.ui.components.GuiaDePantalla
+import com.uv.enzona.ui.components.PasoGuia
+import com.uv.enzona.ui.components.objetivoDeGuia
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -67,8 +71,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.Repositorio
 import com.uv.enzona.data.SessionManager
+import com.uv.enzona.ui.components.EsperaDeCarga
+import com.uv.enzona.ui.components.rememberCarga
 import com.uv.enzona.data.model.BoletoDetalle
 import com.uv.enzona.data.model.EstadoBoleto
 import com.uv.enzona.ui.components.Aviso
@@ -97,10 +103,18 @@ import com.uv.enzona.util.FechaEvento
  */
 @Composable
 fun TicketDetailScreen(boletoId: Long, onVolver: () -> Unit, onAbrirBoleto: ((Long) -> Unit)? = null) {
-    // Se resuelve desde las listas observables: si el validador lo marca
-    // como usado, la pantalla se actualiza sola
-    val boleto = MockRepository.boletos.find { it.id == boletoId } ?: return
-    val detalle = MockRepository.detalleDe(boleto) ?: return
+    // El boleto y sus hermanos de orden ("k de N") se piden juntos
+    val carga = rememberCarga(boletoId) {
+        val repositorio = Repositorio.actual
+        val pedido = repositorio.boleto(boletoId)
+        pedido to repositorio.misBoletos().filter { it.orden.id == pedido.orden.id }.sortedBy { it.id }
+    }
+    val cargado = carga.valor
+    if (cargado == null) {
+        EsperaDeCarga(carga, titulo = "Tu boleto", onVolver = onVolver, textoCargando = "Cargando tu boleto…")
+        return
+    }
+    val detalle = cargado.first
     val contexto = LocalContext.current
     var correoAbierto by rememberSaveable { mutableStateOf(false) }
 
@@ -123,8 +137,17 @@ fun TicketDetailScreen(boletoId: Long, onVolver: () -> Unit, onAbrirBoleto: ((Lo
 
     val qr = remember(detalle.contenidoQr) { QrGenerator.generar(detalle.contenidoQr).asImageBitmap() }
     // Boletos de la misma orden: "Boleto k de N" con navegación entre ellos
-    val hermanos = MockRepository.boletosDeOrden(detalle.orden.id)
+    val hermanos = cargado.second.ifEmpty { listOf(detalle) }
     val posicion = hermanos.indexOfFirst { it.id == detalle.id } + 1
+
+    GuiaDePantalla(
+        clave = Guias.Clave.BOLETO,
+        pasos = listOf(
+            PasoGuia("boleto_qr", "Este es tu boleto", "En la entrada, muestra este código en tu pantalla y lo escanean. Sirve una sola vez. El brillo sube solo para que se lea bien."),
+            PasoGuia("boleto_estado", "Aquí ves cómo está tu boleto", "Te dice si sigue vigente, si ya lo usaste para entrar o si el evento se canceló. Si se cancela, el reembolso se hace solo; no tienes que hacer nada."),
+            PasoGuia("boleto_correo", "Por si acaso, mándatelo al correo", "Así tendrás tu boleto aunque en el lugar no haya señal o se te acabe la batería."),
+        ),
+    )
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -148,10 +171,13 @@ fun TicketDetailScreen(boletoId: Long, onVolver: () -> Unit, onAbrirBoleto: ((Lo
                 )
                 Spacer(Modifier.height(Espacio.m))
             }
-            TalonBoleto(detalle = detalle, qr = qr, posicion = if (hermanos.size > 1) posicion to hermanos.size else null)
+            TalonBoleto(
+                detalle = detalle, qr = qr, posicion = if (hermanos.size > 1) posicion to hermanos.size else null,
+                modifier = Modifier.objetivoDeGuia("boleto_qr"),
+            )
 
             Spacer(Modifier.height(Espacio.l))
-            TextoEstado(detalle)
+            Box(Modifier.objetivoDeGuia("boleto_estado")) { TextoEstado(detalle) }
 
             Spacer(Modifier.height(Espacio.l))
 
@@ -160,6 +186,7 @@ fun TicketDetailScreen(boletoId: Long, onVolver: () -> Unit, onAbrirBoleto: ((Lo
             BotonSecundario(
                 texto = "Enviar con mi app de correo",
                 icono = Icons.Filled.MailOutline,
+                modifier = Modifier.objetivoDeGuia("boleto_correo"),
                 onClick = {
                     val correo = SessionManager.usuario?.correo ?: ""
                     val intent = Intent(Intent.ACTION_SEND).apply {

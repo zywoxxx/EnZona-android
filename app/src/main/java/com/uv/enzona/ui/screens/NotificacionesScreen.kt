@@ -43,7 +43,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.uv.enzona.data.MockRepository
-import com.uv.enzona.data.SessionManager
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.Carga
+import com.uv.enzona.ui.components.IndicadorCarga
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.model.NotificacionAsistente
 import com.uv.enzona.data.model.TipoNotificacion
 import com.uv.enzona.ui.components.BarraSuperiorEnZona
@@ -76,14 +80,14 @@ fun NotificacionesScreen(
     onAbrirBoleto: (Long) -> Unit,
     onAbrirEvento: (Long) -> Unit,
 ) {
-    val usuarioId = SessionManager.usuarioId
     var filtro by rememberSaveable { mutableStateOf(FiltroNotificacion.TODAS) }
 
-    // Se lee de la lista observable: al marcar como leída la tarjeta se actualiza sola
-    val todas = MockRepository.notificaciones.toList()
-    val propias = MockRepository.notificacionesDe(usuarioId)
+    // Al marcar como leída se vuelven a pedir (rememberCarga observa los cambios)
+    val carga = rememberCarga { Repositorio.actual.notificaciones() }
+    val operacion = rememberOperacion()
+    val propias = carga.valor.orEmpty()
     val visibles = propias.filter { it.tipo in filtro.tipos }
-    val noLeidas = todas.count { it.usuarioId == usuarioId && !it.leida }
+    val noLeidas = propias.count { !it.leida }
 
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
@@ -129,7 +133,10 @@ fun NotificacionesScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         if (noLeidas > 0) {
-                            TextButton(onClick = { MockRepository.marcarNotificacionesLeidas(usuarioId) }) {
+                            TextButton(
+                                enabled = !operacion.enCurso,
+                                onClick = { operacion.ejecutar<Unit> { Repositorio.actual.marcarNotificacionesLeidas() } },
+                            ) {
                                 Text("Marcar todas como leídas")
                             }
                         }
@@ -140,14 +147,25 @@ fun NotificacionesScreen(
                 TarjetaNotificacion(
                     notificacion = n,
                     onClick = {
-                        MockRepository.marcarNotificacionLeida(n.id)
+                        if (!n.leida) operacion.ejecutar<Unit> { Repositorio.actual.marcarNotificacionLeida(n.id) }
                         val boletoId = n.boletoId
                         if (boletoId != null && n.tipo != TipoNotificacion.EVENTO_CANCELADO) onAbrirBoleto(boletoId)
                         else onAbrirEvento(n.eventoId)
                     },
                 )
             }
-            if (visibles.isEmpty()) {
+            when (val estado = carga.estado) {
+                is Carga.Cargando -> item(key = "cargando") { IndicadorCarga("Cargando notificaciones…", Modifier.padding(vertical = Espacio.xl)) }
+                is Carga.Fallo -> item(key = "fallo") {
+                    EstadoVacio(
+                        icono = Icons.Filled.NotificationsNone,
+                        titulo = if (estado.sinConexion) "Sin conexión con el servidor" else "No se pudieron cargar",
+                        texto = estado.mensaje, textoAccion = "Reintentar", onAccion = carga::recargar,
+                    )
+                }
+                is Carga.Lista -> Unit
+            }
+            if (carga.estado is Carga.Lista && visibles.isEmpty()) {
                 item(key = "vacio") {
                     EstadoVacio(
                         icono = Icons.Filled.NotificationsNone,

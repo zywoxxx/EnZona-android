@@ -27,7 +27,10 @@ enum class TipoCancelacion {
     BORRADOR,
     GRATUITO,
     DE_PAGO_SIN_VENTAS,
+    /** Evento de pago con ventas y comisión del 10 % al organizador (datos de prueba). */
     DE_PAGO_CON_COMISION,
+    /** Evento de pago con ventas sin comisión: reembolso del 100 % (así lo resuelve la API de EnZona). */
+    DE_PAGO_CON_VENTAS,
     ADMINISTRATIVA,
 }
 

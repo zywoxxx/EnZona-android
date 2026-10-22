@@ -23,29 +23,41 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.CanalVerificacion
+import com.uv.enzona.data.EstadoVerificacion
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.ui.components.BotonEnZona
 import com.uv.enzona.ui.components.CampoEnZona
 import com.uv.enzona.ui.theme.AmarilloAcento
 import com.uv.enzona.ui.theme.MoradoFondo
 import com.uv.enzona.ui.theme.MoradoSuperficie
-import com.uv.enzona.ui.theme.NaranjaAcento
 import com.uv.enzona.ui.theme.RojoError
 import com.uv.enzona.ui.theme.TextoPrincipal
 import com.uv.enzona.ui.theme.TextoSecundario
+import com.uv.enzona.ui.theme.VerdeOk
 
 /**
  * Verificación de la cuenta con código de un solo uso (RF-02).
  * Casos de prueba CP-01 (OTP correcto) y CP-04 (OTP incorrecto).
  *
- * En producción el código llega por correo o SMS; aquí se muestra en pantalla
- * porque no hay servicio de mensajería en la demo.
+ * La API envía un código al correo y, si se registró un teléfono, otro al
+ * teléfono: la cuenta se activa cuando ambos se confirman, así que la pantalla
+ * pide el segundo código después del primero.
+ *
+ * SIMULACIÓN: con los datos de prueba (sin servidor) el código se muestra aquí
+ * rotulado como simulación. Con la API el código nunca viaja a la app: en
+ * desarrollo (`NOTIFICATIONS_MODE=log`) aparece en la consola del servidor.
  */
 @Composable
 fun OtpScreen(usuarioId: Long, onVerificado: () -> Unit) {
     var codigo by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
-    var otpVisible by remember { mutableStateOf(MockRepository.otpDe(usuarioId) ?: "") }
+    var aviso by remember { mutableStateOf<String?>(null) }
+    var canal by remember { mutableStateOf(CanalVerificacion.CORREO) }
+    var otpVisible by remember { mutableStateOf(CodigoSimulado.de(usuarioId)) }
+    val operacion = rememberOperacion()
+    val destino = if (canal == CanalVerificacion.CORREO) "correo" else "teléfono"
 
     Column(
         modifier = Modifier
@@ -58,25 +70,32 @@ fun OtpScreen(usuarioId: Long, onVerificado: () -> Unit) {
         Text("Verifica tu cuenta", style = MaterialTheme.typography.headlineMedium, color = TextoPrincipal)
         Spacer(Modifier.height(8.dp))
         Text(
-            "Enviamos un código de 6 dígitos a tu correo. Ingrésalo para activar tu cuenta.",
+            "Enviamos un código de 6 dígitos a tu $destino. Ingrésalo para activar tu cuenta.",
             color = TextoSecundario, textAlign = TextAlign.Center
         )
 
         Spacer(Modifier.height(24.dp))
 
-        // Ayuda de demostración
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RoundedCornerShape(14.dp))
-                .background(MoradoSuperficie)
-                .padding(14.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("Modo demostración — código generado:", color = TextoSecundario,
-                style = MaterialTheme.typography.bodyMedium)
-            Text(otpVisible, color = AmarilloAcento, fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.headlineMedium)
+        // Ayuda de demostración: solo cuando el envío del código es una simulación
+        if (otpVisible.isNotBlank()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(MoradoSuperficie)
+                    .padding(14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text("Simulación — no hay envío real de correo. Código generado:", color = TextoSecundario,
+                    style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+                Text(otpVisible, color = AmarilloAcento, fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineMedium)
+            }
+        }
+
+        aviso?.let {
+            Spacer(Modifier.height(12.dp))
+            Text(it, color = VerdeOk, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
         }
 
         Spacer(Modifier.height(24.dp))
@@ -92,19 +111,40 @@ fun OtpScreen(usuarioId: Long, onVerificado: () -> Unit) {
         BotonEnZona(
             texto = "Verificar",
             habilitado = codigo.length == 6,
+            cargando = operacion.enCurso,
             onClick = {
-                if (MockRepository.verificarOtp(usuarioId, codigo)) {
-                    onVerificado()
-                } else {
-                    error = "El código es incorrecto. Intenta de nuevo o solicita otro."
-                }
+                operacion.ejecutar(
+                    alTerminar = { estado: EstadoVerificacion ->
+                        if (estado.completa) {
+                            CodigoSimulado.olvidar(usuarioId)
+                            onVerificado()
+                        } else {
+                            // Falta el segundo canal (teléfono): se pide su código sin salir de la pantalla
+                            canal = estado.siguienteCanal ?: CanalVerificacion.TELEFONO
+                            codigo = ""
+                            error = null
+                            aviso = "Código del correo aceptado. Ahora escribe el código que enviamos a tu teléfono."
+                        }
+                    },
+                    alFallar = { error = it.message ?: "El código es incorrecto. Intenta de nuevo o solicita otro." },
+                ) { Repositorio.actual.verificarOtp(usuarioId, codigo) }
             }
         )
-        TextButton(onClick = {
-            otpVisible = MockRepository.reenviarOtp(usuarioId)
-            codigo = ""
-            error = null
-        }) {
+        TextButton(
+            enabled = !operacion.enCurso,
+            onClick = {
+                operacion.ejecutar(
+                    alTerminar = { nuevo: String? ->
+                        otpVisible = nuevo.orEmpty()
+                        CodigoSimulado.recordar(usuarioId, nuevo)
+                        codigo = ""
+                        error = null
+                        aviso = "Enviamos un código nuevo a tu $destino."
+                    },
+                    alFallar = { error = it.message },
+                ) { Repositorio.actual.reenviarOtp(usuarioId) }
+            },
+        ) {
             Text("Reenviar código", color = com.uv.enzona.ui.theme.AzulProfundo)
         }
 

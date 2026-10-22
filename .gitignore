@@ -20,3 +20,13 @@ local.properties
 *.hprof
 .DS_Store
 Thumbs.db
+
+# Backend: credenciales y configuración local (nunca se versionan)
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/src/main/resources/application-local.yml
+backend/target/
+
+# Registro suelto de Maven
+backend/error-backend.txt

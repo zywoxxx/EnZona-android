@@ -81,6 +81,12 @@ fun DialogoCancelarEvento(
                                 "Los asistentes reciben el 100 % de reembolso; la comisión se carga a tu cuenta de organizador.",
                             tono = Tono.Aviso,
                         )
+                        TipoCancelacion.DE_PAGO_CON_VENTAS -> Aviso(
+                            titulo = "Reembolso del 100 %",
+                            texto = "Se devolverán ${Formato.importeMxn(politica.importeCobrado.toDouble())} a los asistentes por el mismo medio de pago. " +
+                                "No se aplica comisión al organizador.",
+                            tono = Tono.Aviso,
+                        )
                         TipoCancelacion.DE_PAGO_SIN_VENTAS -> Aviso(
                             texto = "Este evento de pago no tiene ventas: no se aplica comisión y la cancelación procede como en un evento gratuito.",
                             tono = Tono.Neutro,
@@ -141,6 +147,8 @@ private fun textoPolitica(p: PoliticaCancelacion, administrativa: Boolean): Stri
         p.tipo == TipoCancelacion.DE_PAGO_CON_COMISION ->
             "Se reembolsarán ${Formato.importeMxn(p.reembolso.toDouble())} por ${if (n == 1) "1 boleto" else "$n boletos"} a sus asistentes. " +
                 "Se aplicará una comisión de cancelación del $PORCENTAJE_COMISION_CANCELACION % (${Formato.importeMxn(p.comision.toDouble())}) a tu cuenta."
+        p.tipo == TipoCancelacion.DE_PAGO_CON_VENTAS ->
+            "Se reembolsarán ${Formato.importeMxn(p.reembolso.toDouble())} por ${if (n == 1) "1 boleto" else "$n boletos"} a sus asistentes. Sin comisión."
         p.tipo == TipoCancelacion.BORRADOR -> "El evento está en borrador: se cancelará sin comisión."
         n == 0 -> "Se cancelará el evento. Todavía no hay confirmaciones que anular."
         else -> "Se cancelará el evento y se anularán ${if (n == 1) "1 confirmación" else "$n confirmaciones"}."

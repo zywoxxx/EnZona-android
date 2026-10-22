@@ -21,6 +21,9 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.ErrorOutline
+import androidx.compose.material.icons.filled.NearMe
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.NotificationsActive
@@ -48,6 +51,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.lazy.itemsIndexed
+import com.uv.enzona.data.Guias
+import com.uv.enzona.ui.components.GuiaDePantalla
+import com.uv.enzona.ui.components.PasoGuia
+import com.uv.enzona.ui.components.objetivoDeGuia
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
@@ -57,8 +66,15 @@ import androidx.compose.ui.unit.dp
 import com.uv.enzona.data.FiltroFecha
 import com.uv.enzona.data.FiltroPrecio
 import com.uv.enzona.data.FiltrosEventos
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.Preferencias
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.data.Ubicacion
 import com.uv.enzona.data.model.Evento
+import com.uv.enzona.ui.components.Aviso
+import com.uv.enzona.ui.components.Carga
+import com.uv.enzona.ui.components.IndicadorCarga
+import com.uv.enzona.ui.components.obtenerUbicacion
+import com.uv.enzona.ui.components.rememberCarga
 import com.uv.enzona.ui.components.CampoEnZona
 import com.uv.enzona.ui.components.EstadoVacio
 import com.uv.enzona.ui.components.Etiqueta
@@ -79,6 +95,10 @@ import com.uv.enzona.util.FechaEvento
  * Los filtros viven en `rememberSaveable`, de modo que al abrir un evento y
  * volver, la búsqueda y los filtros siguen ahí. La zona elegida se muestra
  * arriba y se cambia a mano: el descubrimiento no exige GPS.
+ *
+ * RF-19 / RNF-11: «Cerca de mí» pide el permiso de ubicación solo al tocarlo. Con
+ * consentimiento, la lista llega del servidor ordenada por distancia real
+ * (CP-17); sin él, se filtra por la ciudad elegida (CP-18).
  */
 
 private val filtrosSaver = Saver<FiltrosEventos, List<String>>(
@@ -100,19 +120,58 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
     var cambiandoZona by rememberSaveable { mutableStateOf(false) }
     val estadoLista = rememberLazyListState()
 
-    val zona = MockRepository.ciudad.value
+    val zona = Preferencias.ciudad.value
     val ciudadZona = zona.substringBefore(",").trim()
-    // RF-19/RNF-11 (parcial): la ciudad elegida a mano filtra por `evento.ciudad` (columna v2).
-    // No hay GPS ni orden por cercanía todavía; ver notas técnicas.
-    val publicados = MockRepository.eventosPublicados().filter { it.ciudad.equals(ciudadZona, ignoreCase = true) }
-    val categorias = publicados.map { it.categoria }.distinct().sorted()
+    // Solo se envía la ubicación si la persona dio su consentimiento y hay una lectura
+    val ubicacion: Ubicacion? = Preferencias.ubicacion.takeIf { Preferencias.contenidoPorUbicacion.value }
+    val carga = rememberCarga(ciudadZona, ubicacion) { Repositorio.actual.eventosPublicados(ciudadZona, ubicacion) }
+    val publicados = carga.valor.orEmpty()
+    val categorias = publicados.map { it.categoria }.filter { it.isNotBlank() }.distinct().sorted()
     val lugares = publicados.map { it.lugar }.distinct().sorted()
     val eventos = filtros.aplicar(publicados)
-    // La campana muestra cuántas notificaciones hay sin leer (recordatorios, cancelaciones, compras)
-    val usuarioId = com.uv.enzona.data.SessionManager.usuarioId
-    val noLeidas = remember(MockRepository.notificaciones.size, MockRepository.notificaciones.toList()) {
-        MockRepository.generarRecordatorios(usuarioId)
-        MockRepository.notificacionesNoLeidas(usuarioId)
+    // La campana muestra cuántas notificaciones hay sin leer; si falla, no bloquea el catálogo
+    val conNotificaciones = Repositorio.actual.capacidades.notificaciones
+    val noLeidas = rememberCarga(conNotificaciones) {
+        if (conNotificaciones) runCatching { Repositorio.actual.notificacionesNoLeidas() }.getOrDefault(0) else 0
+    }.valor ?: 0
+
+    // ---- Ubicación: el permiso se pide solo al tocar «Cerca de mí» ----
+    val contexto = androidx.compose.ui.platform.LocalContext.current
+    var avisoUbicacion by rememberSaveable { mutableStateOf<String?>(null) }
+    var buscandoUbicacion by remember { mutableStateOf(false) }
+    fun leerUbicacion() {
+        buscandoUbicacion = true
+        obtenerUbicacion(contexto) { lectura ->
+            buscandoUbicacion = false
+            if (lectura != null) {
+                Preferencias.ubicacion = Ubicacion(lectura.latitude, lectura.longitude)
+                Preferencias.contenidoPorUbicacion.value = true
+                avisoUbicacion = null
+            } else {
+                Preferencias.contenidoPorUbicacion.value = false
+                avisoUbicacion = "No se pudo obtener tu ubicación. Se muestran los eventos de $ciudadZona."
+            }
+        }
+    }
+    val pedirPermiso = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission(),
+    ) { concedido ->
+        if (concedido) leerUbicacion()
+        else {
+            Preferencias.contenidoPorUbicacion.value = false
+            avisoUbicacion = "Sin permiso de ubicación: se muestran los eventos de $ciudadZona. Puedes cambiar de zona arriba."
+        }
+    }
+    fun alternarCercaDeMi() {
+        if (ubicacion != null) {
+            Preferencias.contenidoPorUbicacion.value = false      // retira el consentimiento; no queda historial
+            Preferencias.ubicacion = null
+            return
+        }
+        val permiso = android.Manifest.permission.ACCESS_COARSE_LOCATION
+        val concedido = androidx.core.content.ContextCompat.checkSelfPermission(contexto, permiso) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (concedido) leerUbicacion() else pedirPermiso.launch(permiso)
     }
 
     if (cambiandoZona) {
@@ -120,11 +179,25 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
             zonaActual = zona,
             onCerrar = { cambiandoZona = false },
             onElegir = { nueva ->
-                MockRepository.ciudad.value = nueva
+                Preferencias.ciudad.value = nueva
                 cambiandoZona = false
             },
         )
     }
+
+    // Guía de la primera vez: se abre cuando el catálogo ya está en pantalla
+    GuiaDePantalla(
+        clave = Guias.Clave.INICIO,
+        activa = carga.estado is Carga.Lista,
+        pasos = listOf(
+            PasoGuia(titulo = "¡Hola! Bienvenido a EnZona", texto = "Esta es tu pantalla de inicio. Aquí aparecen los eventos que hay cerca de ti. Te enseñamos en un momento cómo funciona, ¿va?"),
+            PasoGuia("inicio_zona", "Esta es tu ciudad", "Te mostramos los eventos de esta ciudad. Si vas a otra, toca aquí y cámbiala."),
+            PasoGuia("inicio_busqueda", "¿Buscas algo en especial?", "Escribe aquí el nombre del evento o del lugar. La lista se va acortando mientras escribes."),
+            PasoGuia("inicio_filtros", "Estos botones son filtros", "Toca «Gratis» para ver solo eventos sin costo, «Fecha» para elegir un día, y así. «Cerca de mí» pone primero los más cercanos (te pedirá permiso para usar tu ubicación). Puedes usar varios a la vez."),
+            PasoGuia("inicio_evento", "Cada tarjeta es un evento", "Toca una para ver de qué trata, dónde es (con mapa) y conseguir tu lugar."),
+            PasoGuia("nav_" + com.uv.enzona.Rutas.BOLETOS, "Aquí guardas tus boletos", "Cuando consigas un lugar, tu boleto aparece en «Mis boletos». Lo abres y muestras el código en la entrada. ¡Eso es todo!"),
+        ),
+    )
 
     LazyColumn(
         state = estadoLista,
@@ -133,31 +206,63 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
         verticalArrangement = Arrangement.spacedBy(Espacio.m),
     ) {
         item(key = "encabezado") {
-            Encabezado(zona = zona, onCambiarZona = { cambiandoZona = true }, noLeidas = noLeidas, onNotificaciones = onNotificaciones)
+            Encabezado(zona = zona, onCambiarZona = { cambiandoZona = true }, noLeidas = noLeidas, onNotificaciones = onNotificaciones, mostrarNotificaciones = conNotificaciones)
         }
         item(key = "busqueda") {
-            CampoBusqueda(
-                valor = filtros.busqueda,
-                onCambio = { filtros = filtros.copy(busqueda = it) },
-            )
+            Box(Modifier.objetivoDeGuia("inicio_busqueda")) {
+                CampoBusqueda(
+                    valor = filtros.busqueda,
+                    onCambio = { filtros = filtros.copy(busqueda = it) },
+                )
+            }
         }
         item(key = "filtros") {
-            FilaFiltros(
-                filtros = filtros,
-                categorias = categorias,
-                lugares = lugares,
-                onCambio = { filtros = it },
-            )
+            Box(Modifier.objetivoDeGuia("inicio_filtros")) {
+                FilaFiltros(
+                    filtros = filtros,
+                    categorias = categorias,
+                    lugares = lugares,
+                    onCambio = { filtros = it },
+                    cercaDeMi = ubicacion != null,
+                    buscandoUbicacion = buscandoUbicacion,
+                    onCercaDeMi = ::alternarCercaDeMi,
+                )
+            }
         }
+        if (avisoUbicacion != null) {
+            item(key = "avisoUbicacion") { Aviso(texto = avisoUbicacion!!, tono = Tono.Neutro) }
+        }
+        when (val estado = carga.estado) {
+            is Carga.Cargando -> item(key = "cargando") {
+                IndicadorCarga("Buscando eventos…", Modifier.padding(vertical = Espacio.xl))
+            }
+            is Carga.Fallo -> item(key = "fallo") {
+                EstadoVacio(
+                    icono = if (estado.sinConexion) Icons.Filled.CloudOff else Icons.Filled.ErrorOutline,
+                    titulo = if (estado.sinConexion) "Sin conexión con el servidor" else "No se pudieron cargar los eventos",
+                    texto = estado.mensaje,
+                    textoAccion = "Reintentar",
+                    onAccion = carga::recargar,
+                )
+            }
+            is Carga.Lista -> Unit
+        }
+        if (carga.estado !is Carga.Lista) return@LazyColumn
         item(key = "resumen") {
             ResumenFiltros(
                 total = eventos.size,
                 filtros = filtros,
                 onLimpiar = { filtros = filtros.limpiar() },
+                porDistancia = ubicacion != null,
             )
         }
-        items(eventos, key = { it.id }) { evento ->
-            TarjetaEvento(evento = evento, onClick = { onEventoClick(evento.id) })
+        itemsIndexed(eventos, key = { _, evento -> evento.id }) { indice, evento ->
+            // La primera tarjeta es el objetivo de la guía «Abre un evento»
+            TarjetaEvento(
+                evento = evento,
+                onClick = { onEventoClick(evento.id) },
+                modifier = if (indice == 0) Modifier.objetivoDeGuia("inicio_evento") else Modifier,
+            )
         }
         if (eventos.isEmpty()) {
             item(key = "vacio") {
@@ -172,7 +277,7 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
                         else -> null
                     },
                     onAccion = {
-                        if (publicados.isEmpty() && !ciudadZona.equals("Orizaba", true)) MockRepository.ciudad.value = "Orizaba, Veracruz"
+                        if (publicados.isEmpty() && !ciudadZona.equals("Orizaba", true)) Preferencias.ciudad.value = "Orizaba, Veracruz"
                         else filtros = filtros.limpiar()
                     },
                 )
@@ -186,7 +291,14 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
 // ==================================================================
 
 @Composable
-private fun Encabezado(zona: String, onCambiarZona: () -> Unit, noLeidas: Int = 0, onNotificaciones: () -> Unit = {}) {
+private fun Encabezado(
+    zona: String,
+    onCambiarZona: () -> Unit,
+    noLeidas: Int = 0,
+    onNotificaciones: () -> Unit = {},
+    /** false cuando la fuente de datos no tiene centro de notificaciones (API de EnZona: avisa por correo). */
+    mostrarNotificaciones: Boolean = true,
+) {
     Column {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             androidx.compose.foundation.Image(
@@ -198,7 +310,7 @@ private fun Encabezado(zona: String, onCambiarZona: () -> Unit, noLeidas: Int = 
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                 alignment = Alignment.CenterStart,
             )
-            BotonNotificaciones(noLeidas = noLeidas, onClick = onNotificaciones)
+            if (mostrarNotificaciones) BotonNotificaciones(noLeidas = noLeidas, onClick = onNotificaciones)
         }
         Spacer(Modifier.height(Espacio.xs))
         Text(
@@ -212,6 +324,7 @@ private fun Encabezado(zona: String, onCambiarZona: () -> Unit, noLeidas: Int = 
             contentPadding = PaddingValues(horizontal = 0.dp, vertical = 0.dp),
             modifier = Modifier
                 .heightIn(min = Tamanos.control)
+                .objetivoDeGuia("inicio_zona")
                 .semantics { contentDescription = "Zona: $zona. Cambiar zona" },
         ) {
             Icon(
@@ -366,8 +479,20 @@ private fun FilaFiltros(
     categorias: List<String>,
     lugares: List<String>,
     onCambio: (FiltrosEventos) -> Unit,
+    cercaDeMi: Boolean = false,
+    buscandoUbicacion: Boolean = false,
+    onCercaDeMi: () -> Unit = {},
 ) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(Espacio.s)) {
+        // RF-19: ordena por cercanía. El permiso de ubicación se pide al tocarlo, no antes (RNF-11)
+        item {
+            ChipFiltro(
+                texto = if (buscandoUbicacion) "Ubicando…" else "Cerca de mí",
+                activo = cercaDeMi,
+                onClick = onCercaDeMi,
+                iconoFinal = { Icon(Icons.Filled.NearMe, contentDescription = null, modifier = Modifier.width(16.dp)) },
+            )
+        }
         // Gratis y De pago van juntos: son las dos opciones del mismo filtro (precio)
         item {
             ChipFiltro(
@@ -472,7 +597,7 @@ private fun ChipDesplegable(
 }
 
 @Composable
-private fun ResumenFiltros(total: Int, filtros: FiltrosEventos, onLimpiar: () -> Unit) {
+private fun ResumenFiltros(total: Int, filtros: FiltrosEventos, onLimpiar: () -> Unit, porDistancia: Boolean = false) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -484,7 +609,7 @@ private fun ResumenFiltros(total: Int, filtros: FiltrosEventos, onLimpiar: () ->
                 total == 1 -> "1 evento"
                 filtros.hayAlgo -> "$total eventos encontrados"
                 else -> "$total eventos publicados"
-            },
+            } + if (porDistancia) " · del más cercano al más lejano" else "",
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f),
@@ -514,6 +639,7 @@ fun TarjetaEvento(evento: Evento, onClick: () -> Unit, modifier: Modifier = Modi
             nombre = evento.nombre,
             categoria = evento.categoria,
             fecha = evento.fecha,
+            imagenUrl = evento.imagenUrl,
             forma = MaterialTheme.shapes.large.copy(
                 bottomStart = androidx.compose.foundation.shape.CornerSize(0.dp),
                 bottomEnd = androidx.compose.foundation.shape.CornerSize(0.dp),
@@ -530,7 +656,11 @@ fun TarjetaEvento(evento: Evento, onClick: () -> Unit, modifier: Modifier = Modi
             Spacer(Modifier.height(Espacio.s))
             FilaCompacta(Icons.Filled.CalendarMonth, FechaEvento.corto(evento.fecha))
             Spacer(Modifier.height(Espacio.xs))
-            FilaCompacta(Icons.Filled.LocationOn, evento.lugar)
+            FilaCompacta(
+                Icons.Filled.LocationOn,
+                // La distancia la calcula el servidor; si el evento no tiene coordenadas no se inventa
+                evento.distanciaKm?.let { "${evento.lugar} · a ${Formato.distancia(it)}" } ?: evento.lugar,
+            )
             Spacer(Modifier.height(Espacio.m))
             Row(
                 modifier = Modifier.fillMaxWidth(),

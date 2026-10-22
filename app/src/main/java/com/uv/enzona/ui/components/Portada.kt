@@ -34,6 +34,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImagePainter
+import coil.compose.rememberAsyncImagePainter
+import com.uv.enzona.data.Repositorio
 import com.uv.enzona.ui.theme.EnZonaTheme
 import com.uv.enzona.ui.theme.Espacio
 import com.uv.enzona.ui.theme.Tamanos
@@ -42,12 +45,10 @@ import com.uv.enzona.util.FechaEvento
 /*
  * Portada del evento.
  *
- * Diferencia registrada: ni el esquema (`evento`) ni `EventoDto` tienen imagen
- * de portada, así que hoy `imagen` siempre es null. El sustituto es un panel
- * plano por categoría con la fecha como pieza tipográfica: información real del
- * evento, no decoración. Cuando el backend entregue una URL habrá que añadir un
- * cargador de imágenes (p. ej. Coil); este componente ya acepta `cargando` y
- * un `Painter` para no cambiar las pantallas.
+ * Desde v6 el evento puede traer `imagenUrl` (la sube el organizador y la guarda
+ * la API en su almacén); se carga con Coil y, mientras llega o si falla, se
+ * muestra el sustituto: un panel plano por categoría con la fecha como pieza
+ * tipográfica, información real del evento y no decoración.
  */
 
 /** Tonos planos del sustituto de portada. Son fixtures visuales, no colores de marca. */
@@ -83,33 +84,52 @@ fun PortadaEvento(
     fecha: java.time.LocalDateTime,
     modifier: Modifier = Modifier,
     imagen: Painter? = null,
+    /** Portada que entrega la API o la imagen elegida en el teléfono; se carga con Coil. */
+    imagenUrl: String? = null,
     cargando: Boolean = false,
     forma: Shape = MaterialTheme.shapes.large,
     mostrarFecha: Boolean = true,
 ) {
     val tono = tonoDe(categoria)
+    val remota = imagenUrl?.let { rememberAsyncImagePainter(model = Repositorio.urlAbsoluta(it)) }
+    val estadoRemota = remota?.state
+    // Coil mide y lanza la carga al dibujar el painter: hay que dibujarlo desde el principio y
+    // solo retirarlo si la carga falla (entonces se muestra el sustituto por categoría)
+    val pintor = imagen ?: remota?.takeUnless { estadoRemota is AsyncImagePainter.State.Error }
+    val esperando = cargando || (imagen == null && estadoRemota is AsyncImagePainter.State.Loading)
     Box(
         modifier = modifier
             .fillMaxWidth()
             .aspectRatio(Tamanos.PROPORCION_PORTADA)
             .clip(forma)
-            .background(if (imagen != null) MaterialTheme.colorScheme.surfaceContainerLow else tono.fondo)
+            .background(if (pintor != null) MaterialTheme.colorScheme.surfaceContainerLow else tono.fondo)
             .semantics { contentDescription = "Portada de $nombre, categoría $categoria" },
     ) {
         when {
-            cargando -> CircularProgressIndicator(
+            pintor != null -> {
+                Image(
+                    painter = pintor,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+                if (esperando) {
+                    CircularProgressIndicator(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(28.dp),
+                        strokeWidth = 2.5.dp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
+            esperando -> CircularProgressIndicator(
                 modifier = Modifier
                     .align(Alignment.Center)
                     .size(28.dp),
                 strokeWidth = 2.5.dp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            imagen != null -> Image(
-                painter = imagen,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
             )
 
             else -> {

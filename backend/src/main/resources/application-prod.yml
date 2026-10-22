@@ -1,0 +1,15 @@
+# Perfil de producción: sin OTP en respuestas, sin Swagger y sin confirmación simulada.
+enzona:
+  otp:
+    devolver-en-respuesta: false
+  pagos:
+    confirmacion-simulada: false
+
+springdoc:
+  swagger-ui:
+    enabled: false
+  api-docs:
+    enabled: false
+
+server:
+  forward-headers-strategy: framework

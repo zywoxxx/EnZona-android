@@ -19,16 +19,31 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import com.uv.enzona.data.Guias
+import com.uv.enzona.ui.components.AnfitrionDeGuias
+import com.uv.enzona.ui.components.objetivoDeGuia
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.uv.enzona.data.Repositorio
 import com.uv.enzona.data.SessionManager
+import com.uv.enzona.ui.components.Carga
+import com.uv.enzona.ui.components.EtiquetaDatosDePrueba
+import com.uv.enzona.ui.components.PantallaCargando
+import com.uv.enzona.ui.components.PantallaError
+import com.uv.enzona.ui.components.mensajeDe
+import com.uv.enzona.data.ErrorEnZona
 import com.uv.enzona.data.model.Rol
 import com.uv.enzona.ui.screens.CheckoutScreen
 import com.uv.enzona.ui.screens.EventDetailScreen
@@ -111,32 +126,75 @@ private data class DestinoBarra(val ruta: String, val etiqueta: String, val icon
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // API REST si local.properties define enzona.api.url; si no, datos de prueba en memoria
+        Repositorio.iniciar(applicationContext)
+        Guias.iniciar(applicationContext)        // qué guías de la primera vez ya se vieron en este teléfono
         // Barras del sistema claras con iconos oscuros, independientemente del modo del sistema
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.light(android.graphics.Color.TRANSPARENT, android.graphics.Color.TRANSPARENT),
         )
         setContent {
-            EnZonaTheme { AppEnZona() }
+            EnZonaTheme { AnfitrionDeGuias { AppEnZona() } }
         }
     }
 }
 
+/** Rutas que se pueden ver sin sesión. */
+private val RUTAS_DE_ACCESO = setOf(Rutas.LOGIN, Rutas.LOGIN_PERSONAL, Rutas.REGISTRO, Rutas.OTP, Rutas.PRIVACIDAD)
+
 @Composable
 fun AppEnZona() {
+    // Al abrir la app se recupera la sesión guardada (token cifrado) con GET /api/usuarios/me
+    var arranque by remember { mutableStateOf<Carga<Unit>>(Carga.Cargando) }
+    var intento by remember { mutableStateOf(0) }
+    LaunchedEffect(intento) {
+        arranque = Carga.Cargando
+        arranque = try {
+            val repositorio = Repositorio.actual
+            repositorio.restaurarSesion()?.let { usuario ->
+                SessionManager.iniciarSesion(usuario, comoPersonal = repositorio.sesionDePersonal() && usuario.esPersonal)
+            }
+            Carga.Lista(Unit)
+        } catch (e: Exception) {
+            Carga.Fallo(mensajeDe(e), (e as? ErrorEnZona)?.sinConexion == true)
+        }
+    }
+    when (val a = arranque) {
+        is Carga.Cargando -> {
+            Scaffold { relleno -> PantallaCargando("Abriendo EnZona…", Modifier.padding(relleno)) }
+            return
+        }
+        is Carga.Fallo -> {
+            Scaffold { relleno -> PantallaError(a.mensaje, a.sinConexion, onReintentar = { intento++ }, modifier = Modifier.padding(relleno)) }
+            return
+        }
+        is Carga.Lista -> Unit
+    }
+
     val navController = rememberNavController()
     val backStack by navController.currentBackStackEntryAsState()
     val rutaActual = backStack?.destination?.route
+    val rutaDeArranque = remember { if (SessionManager.autenticado) rutaInicioDeRol() else Rutas.LOGIN }
 
     val destinos = destinosDeRol()
     val mostrarBarra = SessionManager.autenticado && destinos.any { it.ruta == rutaActual }
 
+    // Si la sesión termina (token expirado o cuenta bloqueada) la app vuelve al acceso
+    LaunchedEffect(SessionManager.autenticado, rutaActual) {
+        if (!SessionManager.autenticado && rutaActual != null && rutaActual !in RUTAS_DE_ACCESO) {
+            navController.navigate(Rutas.LOGIN) { popUpTo(0) { inclusive = true } }
+        }
+    }
+
     Scaffold(
+        topBar = { EtiquetaDatosDePrueba() },
         bottomBar = {
             if (mostrarBarra) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     destinos.forEach { destino ->
                         NavigationBarItem(
+                            modifier = Modifier.objetivoDeGuia("nav_" + destino.ruta),
                             selected = rutaActual == destino.ruta,
                             onClick = { navegarATab(navController, destino.ruta, rutaInicioDeRol()) },
                             icon = { Icon(destino.icono, contentDescription = destino.etiqueta) },
@@ -156,7 +214,7 @@ fun AppEnZona() {
     ) { relleno ->
         NavHost(
             navController = navController,
-            startDestination = Rutas.LOGIN,
+            startDestination = rutaDeArranque,
             modifier = Modifier.padding(relleno)
         ) {
             // ---------------- Acceso ----------------
@@ -166,6 +224,7 @@ fun AppEnZona() {
                     onAutenticado = { irAInicioDeRol(navController) },
                     onIrARegistro = { navController.navigate(Rutas.REGISTRO) },
                     onCambiarModo = { navController.navigate(Rutas.LOGIN_PERSONAL) },
+                    onVerificarCuenta = { usuarioId -> navController.navigate(Rutas.otp(usuarioId)) },
                 )
             }
             composable(Rutas.LOGIN_PERSONAL) {
@@ -183,7 +242,9 @@ fun AppEnZona() {
                         navController.navigate(Rutas.otp(usuarioId)) {
                             popUpTo(Rutas.LOGIN)
                         }
-                    }
+                    },
+                    // El aviso de privacidad se puede leer antes de aceptarlo (sin sesión)
+                    onVerPrivacidad = { navController.navigate(Rutas.PRIVACIDAD) },
                 )
             }
             composable(Rutas.OTP) { entrada ->
@@ -377,7 +438,9 @@ private fun destinosDeRol(): List<DestinoBarra> {
     val usuario = SessionManager.usuario ?: return emptyList()
     val destinos = mutableListOf<DestinoBarra>()
 
-    if (Rol.ASISTENTE in usuario.roles) {
+    // Quien entra por el acceso de personal (validador, organizador, admin) ve solo su trabajo:
+    // «Inicio» y «Mis boletos» son de la experiencia de asistente y se ocultan en esa sesión
+    if (Rol.ASISTENTE in usuario.roles && !SessionManager.accesoPersonal) {
         destinos += DestinoBarra(Rutas.HOME, "Inicio", Icons.Filled.Home)
         destinos += DestinoBarra(Rutas.BOLETOS, "Mis boletos", Icons.Filled.ConfirmationNumber)
     }

@@ -30,8 +30,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.ErrorEnZona
+import com.uv.enzona.data.Repositorio
 import com.uv.enzona.data.SessionManager
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.ui.components.BotonEnZona
 import com.uv.enzona.ui.components.CampoEnZona
 import com.uv.enzona.ui.theme.MoradoFondo
@@ -54,10 +56,14 @@ fun LoginScreen(
     onAutenticado: () -> Unit,
     onIrARegistro: () -> Unit,
     onCambiarModo: () -> Unit,
+    onVerificarCuenta: (Long) -> Unit = {},
 ) {
     var identificador by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var error by remember { mutableStateOf<String?>(null) }
+    // Cuenta registrada pero sin verificar: se ofrece ir a escribir el código
+    var cuentaSinVerificar by remember { mutableStateOf<Long?>(null) }
+    val operacion = rememberOperacion()
 
     Column(
         modifier = Modifier
@@ -97,8 +103,9 @@ fun LoginScreen(
 
         CampoEnZona(
             valor = identificador,
-            onCambio = { identificador = it; error = null },
-            etiqueta = "Correo o CURP",
+            onCambio = { identificador = it; error = null; cuentaSinVerificar = null },
+            etiqueta = "Correo, teléfono o CURP",
+            habilitado = !operacion.enCurso,
         )
         Spacer(Modifier.height(12.dp))
         CampoEnZona(
@@ -106,31 +113,57 @@ fun LoginScreen(
             onCambio = { contrasena = it; error = null },
             etiqueta = "Contraseña",
             esContrasena = true,
+            habilitado = !operacion.enCurso,
         )
 
         if (error != null) {
             Spacer(Modifier.height(10.dp))
-            Text(error!!, color = RojoError, style = MaterialTheme.typography.bodyMedium)
+            Text(error!!, color = RojoError, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
+        } else if (SessionManager.expirada) {
+            Spacer(Modifier.height(10.dp))
+            Text(
+                "Tu sesión expiró. Inicia sesión de nuevo para continuar.",
+                color = TextoSecundario, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center,
+            )
+        }
+        cuentaSinVerificar?.let { id ->
+            TextButton(onClick = { onVerificarCuenta(id) }, enabled = !operacion.enCurso) {
+                Text("Escribir el código de verificación", color = com.uv.enzona.ui.theme.AzulProfundo)
+            }
         }
 
         Spacer(Modifier.height(22.dp))
         BotonEnZona(
             texto = "Iniciar sesión",
             habilitado = identificador.isNotBlank() && contrasena.isNotBlank(),
+            cargando = operacion.enCurso,
             onClick = {
-                val resultado = MockRepository.autenticar(identificador.trim(), contrasena)
-                resultado.onSuccess { usuario ->
-                    if (modoPersonal && !usuario.esPersonal) {
-                        error = "Esta cuenta no tiene permisos de personal. Usa el acceso normal."
-                        return@onSuccess
+                error = null
+                cuentaSinVerificar = null
+                operacion.ejecutar(
+                    alTerminar = { mensaje: String? ->
+                        if (mensaje != null) error = mensaje else onAutenticado()
+                    },
+                    alFallar = { fallo ->
+                        error = fallo.message
+                        if (fallo is ErrorEnZona && fallo.codigo == "CUENTA_NO_VERIFICADA") {
+                            cuentaSinVerificar = (fallo.propiedades["usuarioId"] as? Number)?.toLong()
+                        }
+                    },
+                ) {
+                    val repositorio = Repositorio.actual
+                    val usuario = repositorio.iniciarSesion(identificador.trim(), contrasena, modoPersonal)
+                    // El acceso del personal está separado del de asistentes (Anexo E, E.10)
+                    val rechazo = when {
+                        modoPersonal && !usuario.esPersonal -> "Esta cuenta no tiene permisos de personal. Usa el acceso normal."
+                        !modoPersonal && usuario.esPersonal && usuario.rolPrincipal.name == "ADMIN" ->
+                            "Las cuentas de administración entran por el acceso del personal."
+                        else -> null
                     }
-                    if (!modoPersonal && usuario.esPersonal && usuario.rolPrincipal.name == "ADMIN") {
-                        error = "Las cuentas de administración entran por el acceso del personal."
-                        return@onSuccess
-                    }
-                    SessionManager.iniciarSesion(usuario, comoPersonal = modoPersonal)
-                    onAutenticado()
-                }.onFailure { error = it.message }
+                    if (rechazo != null) repositorio.cerrarSesion()
+                    else SessionManager.iniciarSesion(usuario, comoPersonal = modoPersonal)
+                    rechazo
+                }
             }
         )
 
@@ -150,8 +183,8 @@ fun LoginScreen(
 
         Spacer(Modifier.height(20.dp))
 
-        // Ayuda de demostración (quitar cuando exista el backend)
-        Column(
+        // Cuentas de demostración: solo existen en los datos de prueba en memoria, no en la API
+        if (Repositorio.esDemostracion) Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))

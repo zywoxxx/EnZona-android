@@ -1,0 +1,17 @@
+# Perfil de pruebas: sin datos de demostración. La conexión y los secretos los
+# fija PruebaIntegracion con los del contenedor efímero (nunca los de Aiven).
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 12
+      minimum-idle: 2
+
+enzona:
+  recordatorios:
+    cron: "-"
+
+logging:
+  level:
+    mx.uv.enzona: INFO
+    org.testcontainers: WARN
+    com.github.dockerjava: WARN

@@ -1,7 +1,118 @@
-# EnZona · App Android (Kotlin + Jetpack Compose)
+# EnZona · App Android
 
-App móvil de EnZona con los cuatro actores del diagrama de casos de uso:
-**asistente**, **organizador**, **validador** y **administrador**.
+App móvil de EnZona (Kotlin + Jetpack Compose) con los cuatro actores del
+diagrama de casos de uso —**asistente**, **organizador**, **validador** y
+**administrador**—, conectada a la API REST del equipo, **EnZona_Api**
+(Spring Boot 3 + Java 21 + PostgreSQL, https://github.com/WilliamSosa895/EnZona_Api).
+
+## v6 · Conexión con EnZona_Api (15 de octubre de 2026)
+
+- **`RepositorioRemoto` habla el contrato de EnZona_Api**: rutas, cuerpos,
+  cabeceras (`Idempotency-Key`, paginación) y errores RFC 9457 con `codigo`. La
+  correspondencia completa está en `docs/notas_api_enzona.md`.
+- **Registro** con aceptación del aviso de privacidad (LFPDPPP) y **verificación en
+  dos pasos**: código del correo y, si se dio teléfono, código del teléfono.
+- **Pago con tarjeta** mediante token de un solo uso de la pasarela (sandbox:
+  aprobado o rechazado). Un pago rechazado renueva la clave de idempotencia para
+  poder reintentar.
+- **Validación sin conexión** contra el manifiesto de la API (código y firma) y
+  sincronización del lote con conflictos y duplicados.
+- **Resumen de administración (RF-18)**: pestaña «Resumen» con indicadores de la
+  plataforma (usuarios, eventos, boletos emitidos, accesos validados, ocupación e
+  ingresos) y gráficas de cuentas por estado, eventos por estado, categoría y mes,
+  ingresos y ocupación por evento. Se calcula con las listas de administración y el
+  reporte de cada evento de la API (`calcularEstadisticas`, función pura probada).
+  Mockup en Figma: sección «Resumen de administración (RF-18)» del archivo
+  «EnZona v3 · Mockups» (`docs/figma_v3/README.md`).
+- **Portada de los eventos**: el organizador elige una imagen al crear o editar
+  el evento, la endereza según su orientación EXIF, la encuadra en 16:9
+  (arrastrar, acercar con dos dedos o el control deslizante, girar 90°) y la
+  app recorta exactamente lo que se ve, la reduce (1600 px, JPEG) y la sube a
+  `POST /api/eventos/{id}/imagen`. La API la guarda en su almacén (local en
+  desarrollo o Cloudinary con `CLOUDINARY_URL`, siempre desde el servidor) y
+  devuelve `imagenUrl`; las portadas se cargan con Coil en el catálogo y el
+  detalle. Este endpoint vive en la rama `feature/imagenes-evento` propuesta a
+  EnZona_Api (`docs/notas_api_enzona.md`).
+- **Guías interactivas de la primera vez**: al entrar por primera vez a Inicio,
+  el detalle de un evento, el plano de asientos, un boleto, y para el organizador
+  en Mis eventos, el panel de cada evento y el formulario de nuevo evento,
+  la app oscurece la pantalla, ilumina el control que explica y le apunta con
+  una flecha dibujada a mano junto a un texto corto en blanco; se avanza tocando
+  la pantalla (Omitir / Atrás / Siguiente abajo). Se recuerda por teléfono
+  (`data/Guias.kt`, preferencias locales) y se puede repetir desde Perfil →
+  «Volver a ver las guías». Componente reutilizable `ui/components/GuiaInteractiva.kt`:
+  `AnfitrionDeGuias` envuelve la app, `Modifier.objetivoDeGuia("clave")` marca
+  el objetivo y `GuiaDePantalla(clave, pasos)` declara el recorrido; el foco se
+  trae a la vista si está fuera de pantalla.
+- **Validador pensado para la puerta**: quien entra por el acceso de personal ve
+  solo «Escanear» y «Perfil» (sin Inicio ni Mis boletos). La cámara ocupa la
+  pantalla, con linterna; el resultado llena la zona en verde «PUEDE PASAR» (se
+  cierra solo a los 3 s y vibra) o rojo «NO PUEDE PASAR» con el asiento en
+  grande; arriba quedan el evento, el chip «Con internet / Sin conexión», el
+  botón «Enviar N» de validaciones pendientes y los contadores de la jornada;
+  «Escribir código» abre un diálogo y «Últimos accesos» se despliega.
+- **`Capacidades`**: lo que la API no implementa (métodos de pago guardados,
+  OXXO/SPEI, centro de notificaciones, comisión de cancelación, roles por
+  administrador, «marcar como finalizado») se declara y la interfaz lo oculta.
+- **Pruebas**: 13 de `RepositorioRemoto` contra MockWebServer con las respuestas
+  que documenta la API; flujo completo probado en el emulador contra la API en
+  la PC (`docs/capturas_api/`).
+- El backend propio de v5 (`backend/`) se conserva como prototipo de referencia;
+  la app ya no usa su contrato.
+
+## La API (EnZona_Api)
+
+Requisitos: JDK 21, Maven 3.9 y Docker (PostgreSQL 15). Se clona junto a este
+repositorio, nunca dentro:
+
+```
+git clone https://github.com/WilliamSosa895/EnZona_Api.git
+cd EnZona_Api
+cp .env.example .env        # llena la base y genera cada clave con: openssl rand -base64 32
+docker run -d --name enzona-api-db -e POSTGRES_DB=enzona -e POSTGRES_USER=enzona \
+  -e POSTGRES_PASSWORD=<la misma de .env> -p 5435:5432 postgres:15-alpine
+set -a; source .env; set +a  # DB_URL=jdbc:postgresql://localhost:5435/enzona
+mvn -DskipTests package && java -jar target/enzona-api-0.1.0.jar
+```
+
+| Dirección | Contenido |
+|---|---|
+| `http://localhost:8080/api/categorias` | Catálogo público: responde cuando la API está lista |
+| `http://localhost:8080/swagger-ui.html` | Documentación interactiva |
+
+Con `NOTIFICATIONS_MODE=log` el código de verificación del registro aparece en la
+consola de la API (la app no lo muestra: la API nunca lo devuelve). Con
+`PAYMENT_PROVIDER=sandbox` el pago con tarjeta se simula.
+
+**Base de Aiven:** la base compartida tiene hoy el esquema del prototipo
+`backend/`; EnZona_Api espera el suyo (Flyway V1 a V5) y no arranca contra ella.
+Hay que acordar en el equipo qué esquema se conserva antes de apuntar la API a
+Aiven (detalle en `docs/notas_api_enzona.md`).
+
+## v5 · Prototipo de backend propio (29 de septiembre de 2026)
+
+- **Backend** en `backend/`: monolito modular por capas (auth, usuarios, eventos,
+  ordenes, boletos, validacion, notificaciones, admin, common), 57 operaciones
+  REST, JWT, errores RFC 7807, migraciones Flyway y OpenAPI.
+- **Base real** en Aiven (PostgreSQL 18.6): las migraciones V2 a V7 aplicaron lo que
+  faltaba sobre el esquema v2 y el sembrador cargó los datos de demostración.
+- **App**: las pantallas hablan con `RepositorioEnZona`. Con `enzona.api.url` usan la
+  API (`RepositorioRemoto`); sin ella, los datos de prueba (`RepositorioMock`) con la
+  etiqueta «Datos de prueba». Estados visibles de cargando, error y reintento.
+- **Simulaciones**, rotuladas como tales: pasarela de pago, correo y envío del código
+  de verificación.
+- **Pruebas**: 49 del backend (Testcontainers, con concurrencia real), 68 unitarias de
+  Android y 7 de Compose.
+
+Detalle en `docs/notas_v5_backend.md`; contrato en `docs/openapi_enzona_v5.json`;
+capturas del flujo contra la base real en `docs/capturas_v5/`.
+
+### El prototipo `backend/`
+
+Sigue en el repositorio como referencia (JDK 21, `./mvnw spring-boot:run` desde
+`backend/`, con su propio `backend/.env` no versionado). Desde v6 la app no habla
+su contrato, así que no sirve para probar la app; su esquema es el que está hoy en
+la base de Aiven.
 
 ## v4 · Modelo relacional, notificaciones y ajustes de interfaz (22 de septiembre de 2026)
 
@@ -146,17 +257,23 @@ El contenido del QR es `codigo.firma`, con la firma HMAC-SHA256 del código
 (RNF-02). El validador **verifica la firma antes de consultar la base**, así que
 un QR inventado se rechaza aunque no haya conexión.
 
-En la demo la firma se calcula en el teléfono para que el flujo sea completo;
-**en producción la clave HMAC vive solo en el backend**, que además envía el
-boleto por correo al emitirlo (RF-12). El botón "Enviar a mi correo" de la app
-es un sustituto temporal mientras no existe ese servicio.
+Con la API, **la clave HMAC vive solo en el backend**: el servidor firma al emitir
+y verifica al validar. Con datos de prueba la firma se calcula en el teléfono para
+que el flujo sea completo. El envío del boleto por correo (RF-12) está detrás de
+una interfaz cuya implementación actual solo escribe en el log; el botón "Enviar
+con mi app de correo" abre la app de correo del teléfono.
 
 ## Modo sin conexión del validador (RNF-08, CP-14)
 
-En la pantalla del validador hay un interruptor *«Modo sin conexión»*. Con él
-activo, las validaciones se registran localmente marcadas como *sin sincronizar*
-y aparece el botón **Sincronizar ahora** al recuperar la conexión. La lógica de
-un solo uso funciona igual en ambos modos.
+El validador elige el evento y activa *«Modo sin conexión»* mientras todavía tiene
+red: la app descarga el manifiesto del evento, con la huella SHA-256 de cada
+boleto. Sin red, cada escaneo se comprueba por pertenencia al manifiesto y queda
+marcado como *sin sincronizar*. Al recuperar la conexión, **Sincronizar ahora**
+envía el lote y el servidor aplica la regla de un solo uso e informa cuáles
+resultaron duplicadas.
+
+Sin conexión no se verifica la firma, porque la clave HMAC nunca sale del
+servidor.
 
 ## Cómo probar el escaneo en el emulador
 
@@ -167,16 +284,28 @@ o cámbialo por el código visible bajo el QR más su firma).
 
 Para la prueba real: abre el boleto en un teléfono y escanéalo con otro.
 
-## Conectar el backend cuando esté listo
+## Conectar la app con la API
 
-`data/remote/ApiService.kt` ya define el contrato Retrofit.
+La app elige de dónde salen los datos con `enzona.api.url` en `local.properties`
+(archivo no versionado):
 
-1. Levanta el Spring Boot en `http://localhost:8080`.
-2. En el emulador, `http://10.0.2.2:8080/` apunta a tu máquina (ya configurado).
-3. Crea un `RemoteRepository` con las mismas funciones que `MockRepository` y
-   cámbialo en las pantallas.
-4. El backend es quien firma los boletos, envía los correos y descuenta el aforo
-   con una transacción atómica (RNF-05).
+```
+enzona.api.url=http://10.0.2.2:8080/
+```
+
+| Valor | Resultado |
+|---|---|
+| `http://10.0.2.2:8080/` | Emulador: `10.0.2.2` es la PC donde corre EnZona_Api |
+| `http://<IP de la PC>:8080/` | Teléfono físico en la misma red local (abre el puerto 8080 en el firewall) |
+| vacío | Datos de prueba en memoria, con la etiqueta «Datos de prueba» |
+
+Después de cambiarla hay que recompilar. El tráfico HTTP en claro solo se permite
+en la compilación `debug`; `release` exige HTTPS.
+
+La API firma los boletos, calcula precios y totales, descuenta el inventario de
+forma atómica (RNF-05) y decide si un boleto da acceso. La app propone y el
+servidor dispone. Lo que la API todavía no implementa se declara en
+`Capacidades` y la app no lo ofrece (lista en `docs/notas_api_enzona.md`).
 
 ## Estructura
 
@@ -276,6 +405,7 @@ y registra fecha, autor, motivo y comisión en `evento`.
 - Gestión de categorías y de eventos reportados por el administrador
   (el documento las menciona en la sección 6; hoy las categorías son una
   lista fija en el formulario y no hay reporte de eventos).
-- Pagos reales con pasarela y reembolsos.
-- Persistencia local (Room) y token JWT en DataStore: hoy todo vive en memoria,
-  así que al cerrar la app se reinician los datos de prueba.
+- Pagos reales con pasarela y reembolsos: la pasarela del backend es una simulación.
+- Proveedor de correo y de SMS: el código de verificación y los correos son simulados.
+- La web React, que consumirá el mismo contrato. CP-20 no se puede cerrar sin ella.
+- Persistencia local (Room) para consultar boletos sin red.

@@ -33,7 +33,8 @@ enum class EstadoEvento { BORRADOR, PUBLICADO, REALIZADO, CANCELADO }
 
 enum class EstadoOrden { PENDIENTE, PAGADA, CANCELADA, REEMBOLSADA }
 
-enum class EstadoPago { APROBADO, RECHAZADO, REEMBOLSADO }
+/** PENDIENTE: pagos OXXO/SPEI que la pasarela aún no confirma (migración V3 del backend). */
+enum class EstadoPago { APROBADO, RECHAZADO, REEMBOLSADO, PENDIENTE }
 
 enum class EstadoBoleto { VALIDO, USADO, CANCELADO, EXPIRADO }
 
@@ -105,6 +106,18 @@ data class Evento(
     val canceladoPor: Long? = null,
     val motivoCancelacion: String? = null,
     val comisionCancelacion: Double = 0.0,
+    // v5 (API): datos que el servidor ya entrega resueltos; no son columnas de `evento`
+    /** Distancia al punto del usuario, calculada por el servidor. Null sin ubicación o sin coordenadas. */
+    val distanciaKm: Double? = null,
+    val organizadorNombre: String? = null,
+    val canceladoPorNombre: String? = null,
+    /** Hay órdenes o boletos: el plano de asientos ya no se puede cambiar. */
+    val tieneBoletos: Boolean = false,
+    /**
+     * Portada (v6): URL que entrega la API (absoluta en Cloudinary, relativa `/api/imagenes/…`
+     * con el almacén local) o, con datos de prueba, la imagen elegida en el teléfono. Null = sin portada.
+     */
+    val imagenUrl: String? = null,
 ) {
     val tieneCoordenadas: Boolean get() = latitud != null && longitud != null
     val cancelado: Boolean get() = estado == EstadoEvento.CANCELADO

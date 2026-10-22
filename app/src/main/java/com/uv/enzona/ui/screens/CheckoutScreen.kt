@@ -45,8 +45,13 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
-import com.uv.enzona.data.SessionManager
+import com.uv.enzona.data.PagoElegido
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.data.model.MetodoPago
+import com.uv.enzona.data.model.TipoMetodoPago
+import com.uv.enzona.ui.components.EsperaDeCarga
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.model.Asiento
 import com.uv.enzona.data.model.CompraRealizada
 import com.uv.enzona.data.model.ErrorCompra
@@ -78,14 +83,19 @@ import com.uv.enzona.util.FechaEvento
  * sola vez por pantalla: un doble toque o una recomposición no duplican la
  * emisión (en el backend debe aplicarse con `Idempotency-Key`).
  *
- * Estados: listo → procesando → aprobado (se navega al resumen) | rechazado
- * (aviso recuperable; la selección se conserva). El contrato del repositorio no
- * tiene PENDIENTE: OXXO y SPEI se dan por pagados al instante en la demo y se
- * rotula como simulación.
+ * Estados: listo → procesando → aprobado (se navega al boleto o al resumen) |
+ * pendiente (OXXO y SPEI: el resumen muestra la referencia y los boletos se
+ * emiten cuando la pasarela confirma) | rechazado (aviso recuperable; la
+ * selección se conserva).
+ *
+ * La pasarela del backend es una SIMULACIÓN: «Simular pago rechazado» paga con
+ * el token `-rechazo`, que la pasarela simulada rechaza siempre (CP-10).
  */
 
 private const val METODO_OXXO = -1L
 private const val METODO_SPEI = -2L
+/** Tarjeta sin guardar: la pasarela entrega un token de un solo uso (la API de EnZona no guarda métodos). */
+private const val METODO_TARJETA_PASARELA = -3L
 
 private sealed interface EstadoCobro {
     data object Listo : EstadoCobro
@@ -103,19 +113,37 @@ fun CheckoutScreen(
     onIrAMetodos: () -> Unit,
     onCompraRealizada: (CompraRealizada) -> Unit,
 ) {
-    val evento = MockRepository.eventos.find { it.id == eventoId } ?: return
-    val tipo = tipoBoletoId?.let { id -> MockRepository.tiposBoleto.find { it.id == id } }
-    val asientos = asientosIds.mapNotNull { id -> MockRepository.asientos.find { it.id == id } }
-    val usuarioId = SessionManager.usuarioId
-    val tarjetas = MockRepository.metodosDe(usuarioId)
+    val carga = rememberCarga(eventoId, tipoBoletoId, asientosIds) {
+        val repositorio = Repositorio.actual
+        val evento = repositorio.evento(eventoId)
+        DatosPago(
+            evento = evento,
+            tipo = tipoBoletoId?.let { id -> repositorio.tiposDe(eventoId).find { it.id == id } },
+            asientos = if (asientosIds.isEmpty()) emptyList() else repositorio.asientosDe(eventoId).filter { it.id in asientosIds },
+            tarjetas = if (repositorio.capacidades.metodosGuardados) repositorio.metodosDePago() else emptyList(),
+        )
+    }
+    val datos = carga.valor
+    if (datos == null) {
+        EsperaDeCarga(carga, titulo = "Pago", onVolver = onVolver, textoCargando = "Preparando tu orden…")
+        return
+    }
+    val evento = datos.evento
+    val tipo = datos.tipo
+    val asientos = datos.asientos
+    val tarjetas = datos.tarjetas
+    val capacidades = Repositorio.actual.capacidades
+    // Sin métodos guardados (API de EnZona) se paga con tarjeta directa: el token lo genera la pasarela
+    val ofreceTarjetaDirecta = !capacidades.metodosGuardados || (tarjetas.isEmpty() && !capacidades.pagosDiferidos)
+    val metodoPorDefecto = if (ofreceTarjetaDirecta) METODO_TARJETA_PASARELA else METODO_OXXO
     val n = cantidad.coerceAtLeast(1)
 
     val precioUnitario = tipo?.precio ?: evento.precioDesde
     val comision = 0.0                       // sin comisión al asistente durante el piloto
     val total = precioUnitario * n + comision
 
-    // Comprobación previa de disponibilidad (el repositorio la repite al cobrar)
-    val cupo = MockRepository.cupoDisponible(eventoId, tipo?.id)
+    // Comprobación previa de disponibilidad (el servidor la repite al cobrar)
+    val cupo = minOf(evento.disponibles, tipo?.cantidadDisponible ?: evento.disponibles).coerceAtLeast(0)
     val asientosOcupados = asientos.filter { !it.libre }
     val bloqueoPrevio: String? = when {
         evento.requiereAsiento && asientos.size != n -> "La selección de asientos no coincide con la cantidad ($n). Vuelve al plano para corregirla."
@@ -125,40 +153,49 @@ fun CheckoutScreen(
     }
 
     var seleccion by rememberSaveable {
-        mutableStateOf(MockRepository.metodoPredeterminado(usuarioId)?.id ?: METODO_OXXO)
+        mutableStateOf((tarjetas.firstOrNull { it.predeterminado } ?: tarjetas.firstOrNull())?.id ?: metodoPorDefecto)
     }
     var simularRechazo by rememberSaveable { mutableStateOf(false) }
     var estado by remember { mutableStateOf<EstadoCobro>(EstadoCobro.Listo) }
-    val claveOperacion = rememberSaveable { UUID.randomUUID().toString() }
-    val alcance = rememberCoroutineScope()
-    val procesando = estado is EstadoCobro.Procesando
+    var claveOperacion by rememberSaveable { mutableStateOf(UUID.randomUUID().toString()) }
+    val operacion = rememberOperacion()
+    val procesando = operacion.enCurso
 
-    // Si se borró la tarjeta seleccionada al volver de "Administrar", se cae a OXXO
-    if (seleccion > 0 && tarjetas.none { it.id == seleccion }) seleccion = METODO_OXXO
+    // Si se borró la tarjeta seleccionada al volver de "Administrar", o el método ya no se ofrece, se cae al predeterminado
+    if (seleccion > 0 && tarjetas.none { it.id == seleccion }) seleccion = metodoPorDefecto
+    if ((seleccion == METODO_OXXO || seleccion == METODO_SPEI) && !capacidades.pagosDiferidos) seleccion = metodoPorDefecto
 
     fun pagar() {
-        if (estado is EstadoCobro.Procesando || bloqueoPrevio != null) return   // evita el doble envío
+        if (procesando || bloqueoPrevio != null) return   // evita el doble envío; la idempotencia real es del servidor
         estado = EstadoCobro.Procesando
-        alcance.launch {
-            delay(1400) // simula la ida y vuelta con la pasarela
-            val metodo = tarjetas.find { it.id == seleccion }
-            MockRepository.comprar(
-                usuarioId = usuarioId,
-                solicitud = SolicitudCompra(
-                    eventoId = eventoId, tipoBoletoId = tipo?.id, cantidad = n,
-                    asientosIds = asientosIds, claveOperacion = claveOperacion,
-                ),
-                metodoPago = metodo,
-                pagoAprobado = !simularRechazo,
-            ).onSuccess { compra ->
+        val pago = when (seleccion) {
+            METODO_OXXO -> PagoElegido(TipoMetodoPago.OXXO, simularRechazo = simularRechazo)
+            METODO_SPEI -> PagoElegido(TipoMetodoPago.SPEI, simularRechazo = simularRechazo)
+            METODO_TARJETA_PASARELA -> PagoElegido(TipoMetodoPago.TARJETA, simularRechazo = simularRechazo)
+            else -> PagoElegido(TipoMetodoPago.TARJETA, metodoPagoId = seleccion, simularRechazo = simularRechazo)
+        }
+        operacion.ejecutar(
+            alTerminar = { compra: CompraRealizada ->
                 estado = EstadoCobro.Listo
                 onCompraRealizada(compra)
-            }.onFailure { fallo ->
+            },
+            alFallar = { fallo ->
                 estado = EstadoCobro.Rechazado(
                     mensaje = fallo.message ?: "No se pudo completar el pago.",
                     recuperable = fallo is ErrorCompra.PagoRechazado,
                 )
-            }
+                // Un pago rechazado deja una orden CANCELADA ligada a la clave: el reintento necesita una clave nueva
+                if (fallo is ErrorCompra.PagoRechazado) claveOperacion = UUID.randomUUID().toString()
+                carga.recargar()      // la disponibilidad pudo cambiar: se refresca el resumen
+            },
+        ) {
+            Repositorio.actual.comprar(
+                SolicitudCompra(
+                    eventoId = eventoId, tipoBoletoId = tipo?.id, cantidad = n,
+                    asientosIds = asientosIds, claveOperacion = claveOperacion,
+                ),
+                pago = pago,
+            )
         }
     }
 
@@ -216,11 +253,13 @@ fun CheckoutScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text("Método de pago", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onBackground)
-                    TextButton(onClick = onIrAMetodos, enabled = !procesando) {
-                        Text(if (tarjetas.isEmpty()) "Agregar tarjeta" else "Administrar")
+                    if (capacidades.metodosGuardados) {
+                        TextButton(onClick = onIrAMetodos, enabled = !procesando) {
+                            Text(if (tarjetas.isEmpty()) "Agregar tarjeta" else "Administrar")
+                        }
                     }
                 }
-                if (tarjetas.isEmpty()) {
+                if (tarjetas.isEmpty() && capacidades.metodosGuardados && capacidades.pagosDiferidos) {
                     Aviso(
                         texto = "No tienes tarjetas guardadas. Puedes pagar con OXXO o SPEI, o agregar una tarjeta.",
                         tono = Tono.Neutro,
@@ -236,28 +275,40 @@ fun CheckoutScreen(
                         onClick = { seleccion = tarjeta.id },
                     )
                 }
-                OpcionPago(
-                    icono = Icons.Filled.Storefront,
-                    titulo = "Efectivo en OXXO",
-                    detalle = "Recibes una referencia con vigencia de 24 horas",
-                    seleccionado = seleccion == METODO_OXXO,
-                    habilitado = !procesando,
-                    onClick = { seleccion = METODO_OXXO },
-                )
-                OpcionPago(
-                    icono = Icons.Filled.AccountBalance,
-                    titulo = "Transferencia SPEI",
-                    detalle = "Recibes una CLABE para transferir desde tu banco",
-                    seleccionado = seleccion == METODO_SPEI,
-                    habilitado = !procesando,
-                    onClick = { seleccion = METODO_SPEI },
-                )
+                if (ofreceTarjetaDirecta) {
+                    OpcionPago(
+                        icono = Icons.Filled.CreditCard,
+                        titulo = "Tarjeta de crédito o débito",
+                        detalle = "La pasarela genera un token de un solo uso; EnZona no recibe el número",
+                        seleccionado = seleccion == METODO_TARJETA_PASARELA,
+                        habilitado = !procesando,
+                        onClick = { seleccion = METODO_TARJETA_PASARELA },
+                    )
+                }
+                if (capacidades.pagosDiferidos) {
+                    OpcionPago(
+                        icono = Icons.Filled.Storefront,
+                        titulo = "Efectivo en OXXO",
+                        detalle = "Recibes una referencia con vigencia de 24 horas",
+                        seleccionado = seleccion == METODO_OXXO,
+                        habilitado = !procesando,
+                        onClick = { seleccion = METODO_OXXO },
+                    )
+                    OpcionPago(
+                        icono = Icons.Filled.AccountBalance,
+                        titulo = "Transferencia SPEI",
+                        detalle = "Recibes una CLABE para transferir desde tu banco",
+                        seleccionado = seleccion == METODO_SPEI,
+                        habilitado = !procesando,
+                        onClick = { seleccion = METODO_SPEI },
+                    )
+                }
             }
 
             ZonaDemostracion {
                 Text(
-                    "La pasarela está simulada: no se realiza ningún cargo real. En la demo, OXXO y SPEI se dan por " +
-                        "pagados al instante; en producción el boleto se emite cuando la pasarela confirme el pago.",
+                    "La pasarela está simulada: no se realiza ningún cargo real." +
+                        if (capacidades.pagosDiferidos) " Con OXXO o SPEI la orden queda pendiente con su referencia y los boletos se emiten cuando se confirma el pago." else "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -269,7 +320,7 @@ fun CheckoutScreen(
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text("Simular pago rechazado", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurface)
-                        Text("Reproduce el caso de prueba CP-10.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text("Paga con el token de rechazo de la pasarela simulada (CP-10).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Switch(
                         checked = simularRechazo,
@@ -299,6 +350,8 @@ fun CheckoutScreen(
 // ==================================================================
 //  Piezas
 // ==================================================================
+
+private data class DatosPago(val evento: Evento, val tipo: TipoBoleto?, val asientos: List<Asiento>, val tarjetas: List<MetodoPago>)
 
 @Composable
 private fun ResumenOrden(evento: Evento, tipo: TipoBoleto?, cantidad: Int, asientos: List<Asiento>) {

@@ -22,21 +22,25 @@ object FechaEvento {
     val ZONA: ZoneId = ZoneId.of("America/Mexico_City")
     val LOCALE: Locale = Locale("es", "MX")
 
-    private val fmtDiaMes = DateTimeFormatter.ofPattern("EEE d MMM", LOCALE)
-    private val fmtDiaMesAnio = DateTimeFormatter.ofPattern("EEE d MMM yyyy", LOCALE)
+    // Abreviaturas fijas: las de la plataforma cambian con su versión ("sep" en unas, "sept" en otras)
+    // y el texto debe ser el mismo en todos los teléfonos y en el servidor.
+    private val DIAS = listOf("Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom")
+    private val MESES = listOf("Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic")
+    private fun diaYMes(f: LocalDate) = "${DIAS[f.dayOfWeek.value - 1]} ${f.dayOfMonth} ${MESES[f.monthValue - 1]}"
+
     private val fmtHora = DateTimeFormatter.ofPattern("HH:mm", LOCALE)
     private val fmtIso = DateTimeFormatter.ISO_OFFSET_DATE_TIME
 
     fun ahora(): LocalDateTime = LocalDateTime.now(ZONA)
 
     /** "Vie 25 Sep · 19:00" (formato de tarjetas, detalle y boleto). */
-    fun corto(fecha: LocalDateTime): String = "${limpiar(fmtDiaMes.format(fecha))} · ${hora(fecha)}"
+    fun corto(fecha: LocalDateTime): String = "${diaYMes(fecha.toLocalDate())} · ${hora(fecha)}"
 
     /** "Vie 25 Sep 2026 · 19:00" (resumen del formulario). */
-    fun largo(fecha: LocalDateTime): String = "${limpiar(fmtDiaMesAnio.format(fecha))} · ${hora(fecha)}"
+    fun largo(fecha: LocalDateTime): String = "${diaYMes(fecha.toLocalDate())} ${fecha.year} · ${hora(fecha)}"
 
     /** "Vie 25 Sep 2026" (campo de fecha del formulario). */
-    fun soloFecha(fecha: LocalDate): String = limpiar(fmtDiaMesAnio.format(fecha))
+    fun soloFecha(fecha: LocalDate): String = "${diaYMes(fecha)} ${fecha.year}"
 
     /** "19:00". */
     fun hora(fecha: LocalDateTime): String = fmtHora.format(fecha)
@@ -46,8 +50,7 @@ object FechaEvento {
     fun dia(fecha: LocalDateTime): String = fecha.dayOfMonth.toString()
 
     /** Mes abreviado en minúsculas ("sep"). */
-    fun mesCorto(fecha: LocalDateTime): String =
-        limpiar(DateTimeFormatter.ofPattern("MMM", LOCALE).format(fecha)).lowercase()
+    fun mesCorto(fecha: LocalDateTime): String = MESES[fecha.monthValue - 1].lowercase()
 
     /** Intervalo "Vie 25 Sep · 19:00 – 21:30" o con fecha de fin distinta. */
     fun intervalo(inicio: LocalDateTime, fin: LocalDateTime?): String = when {
@@ -65,10 +68,4 @@ object FechaEvento {
     } catch (_: DateTimeParseException) {
         null
     }
-
-    /** Quita los puntos de las abreviaturas ("vie." → "Vie") y capitaliza cada palabra. */
-    private fun limpiar(texto: String): String =
-        texto.replace(".", "").split(" ").joinToString(" ") { p ->
-            p.replaceFirstChar { if (it.isLowerCase()) it.titlecase(LOCALE) else it.toString() }
-        }
 }

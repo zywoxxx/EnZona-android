@@ -20,6 +20,7 @@ import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CreditCard
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.HelpOutline
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material.icons.filled.Person
@@ -39,13 +40,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import com.uv.enzona.data.Guias
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.Preferencias
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.data.SessionManager
 import com.uv.enzona.data.model.Rol
 import com.uv.enzona.ui.components.BotonEnZona
@@ -75,23 +80,35 @@ fun ProfileScreen(
     onRolCambiado: () -> Unit = {},
 ) {
     val usuario = SessionManager.usuario ?: return
-    val tarjetas = MockRepository.metodosDe(usuario.id)
+    // Datos secundarios del perfil: si fallan no impiden ver la cuenta
+    val conMetodosGuardados = Repositorio.actual.capacidades.metodosGuardados
+    val tarjetas = rememberCarga(usuario.id, conMetodosGuardados) {
+        if (conMetodosGuardados) runCatching { Repositorio.actual.metodosDePago() }.getOrDefault(emptyList()) else emptyList()
+    }.valor.orEmpty()
+    val operacion = rememberOperacion()
 
     // ---- Confirmaciones de rol (v3, cambio 2) ----
     var confirmarConvertirse by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     var confirmarDejar by androidx.compose.runtime.saveable.rememberSaveable { androidx.compose.runtime.mutableStateOf(false) }
     val snackbar = androidx.compose.runtime.remember { androidx.compose.material3.SnackbarHostState() }
     val alcance = androidx.compose.runtime.rememberCoroutineScope()
-    val motivoNoDejar = if (Rol.ORGANIZADOR in usuario.roles) MockRepository.motivoNoPuedeDejarOrganizador(usuario.id) else null
+    val esOrganizador = Rol.ORGANIZADOR in usuario.roles
+    val motivoNoDejar = rememberCarga(usuario.id, esOrganizador) {
+        if (esOrganizador) runCatching { Repositorio.actual.motivoNoPuedeDejarOrganizador() }.getOrNull() else null
+    }.valor
 
     if (confirmarConvertirse) {
         com.uv.enzona.ui.components.DialogoConvertirseOrganizador(
             onCancelar = { confirmarConvertirse = false },
             onConfirmar = {
                 confirmarConvertirse = false
-                MockRepository.activarRolOrganizador(usuario.id)
-                SessionManager.refrescar()   // la barra inferior se rearma con el nuevo rol; seguimos en Perfil
-                alcance.launch { snackbar.showSnackbar("Ahora eres organizador") }
+                operacion.ejecutar(
+                    alTerminar = { cuenta: com.uv.enzona.data.model.Usuario ->
+                        SessionManager.actualizar(cuenta)   // la barra inferior se rearma con el nuevo rol; seguimos en Perfil
+                        alcance.launch { snackbar.showSnackbar("Ahora eres organizador") }
+                    },
+                    alFallar = { alcance.launch { snackbar.showSnackbar(it.message ?: "No se pudo activar el rol.") } },
+                ) { Repositorio.actual.convertirseEnOrganizador() }
             },
         )
     }
@@ -102,14 +119,15 @@ fun ProfileScreen(
             onConfirmar = {
                 confirmarDejar = false
                 val eraAccesoPersonal = SessionManager.accesoPersonal
-                MockRepository.dejarRolOrganizador(usuario.id)
-                    .onSuccess {
-                        SessionManager.refrescar()
+                operacion.ejecutar(
+                    alTerminar = { cuenta: com.uv.enzona.data.model.Usuario ->
+                        SessionManager.actualizar(cuenta)
                         // Si el rol activo era el de personal, la sesión vuelve a asistente y a Inicio
                         if (eraAccesoPersonal) onRolCambiado()
                         else alcance.launch { snackbar.showSnackbar("Ya no eres organizador. Sigues siendo asistente.") }
-                    }
-                    .onFailure { alcance.launch { snackbar.showSnackbar(it.message ?: "No se pudo quitar el rol.") } }
+                    },
+                    alFallar = { alcance.launch { snackbar.showSnackbar(it.message ?: "No se pudo quitar el rol.") } },
+                ) { Repositorio.actual.dejarDeSerOrganizador() }
             },
         )
     }
@@ -253,14 +271,14 @@ fun ProfileScreen(
             FilaAjuste(
                 icono = Icons.Filled.Place,
                 texto = "Mi ubicación",
-                valor = MockRepository.ciudad.value,
+                valor = Preferencias.ciudad.value,
                 mostrarFlecha = false,
             )
             Separador()
             FilaAjuste(
                 icono = Icons.Filled.Public,
                 texto = "Mi país",
-                valor = MockRepository.pais.value,
+                valor = Preferencias.pais.value,
                 mostrarFlecha = false,
             )
             Separador()
@@ -279,12 +297,19 @@ fun ProfileScreen(
                 ) {
                     Text("Contenido basado en mi ubicación", color = TextoPrincipal,
                         style = MaterialTheme.typography.bodyLarge)
-                    Text("Muestra primero los eventos de tu zona", color = TextoSecundario,
-                        style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        if (Preferencias.ubicacion != null && Preferencias.contenidoPorUbicacion.value) "Activo: Inicio ordena por cercanía"
+                        else "Se activa con «Cerca de mí» en Inicio",
+                        color = TextoSecundario, style = MaterialTheme.typography.labelMedium)
                 }
+                // El consentimiento se da al tocar «Cerca de mí» (ahí se pide el permiso); aquí se puede retirar
                 Switch(
-                    checked = MockRepository.contenidoPorUbicacion.value,
-                    onCheckedChange = { MockRepository.contenidoPorUbicacion.value = it },
+                    checked = Preferencias.ubicacion != null && Preferencias.contenidoPorUbicacion.value,
+                    enabled = Preferencias.ubicacion != null,
+                    onCheckedChange = { activo ->
+                        Preferencias.contenidoPorUbicacion.value = activo
+                        if (!activo) Preferencias.ubicacion = null      // no se conserva la ubicación
+                    },
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = NaranjaAcento,
@@ -309,14 +334,17 @@ fun ProfileScreen(
                 onClick = onEditarPerfil,
             )
             Separador()
-            FilaAjuste(
-                icono = Icons.Filled.CreditCard,
-                texto = "Métodos de pago guardados",
-                descripcion = if (tarjetas.isEmpty()) "Ninguno guardado"
-                else "${tarjetas.size} guardado(s)",
-                onClick = onMetodosPago,
-            )
-            Separador()
+            // La API de EnZona no guarda métodos de pago: la fila solo aparece con datos que lo soportan
+            if (conMetodosGuardados) {
+                FilaAjuste(
+                    icono = Icons.Filled.CreditCard,
+                    texto = "Métodos de pago guardados",
+                    descripcion = if (tarjetas.isEmpty()) "Ninguno guardado"
+                    else "${tarjetas.size} guardado(s)",
+                    onClick = onMetodosPago,
+                )
+                Separador()
+            }
             FilaAjuste(
                 icono = Icons.Filled.Shield,
                 texto = "Seguridad",
@@ -337,6 +365,17 @@ fun ProfileScreen(
                 icono = Icons.Filled.HelpOutline,
                 texto = "¿Necesitas ayuda?",
                 onClick = onAyuda,
+            )
+            Separador()
+            FilaAjuste(
+                icono = Icons.Filled.Lightbulb,
+                texto = "Volver a ver las guías",
+                descripcion = "Los recorridos de la primera vez se muestran de nuevo en cada pantalla",
+                mostrarFlecha = false,
+                onClick = {
+                    Guias.reiniciar()
+                    alcance.launch { snackbar.showSnackbar("Listo: las guías volverán a aparecer al entrar a cada pantalla.") }
+                },
             )
             Separador()
             FilaAjuste(
@@ -367,15 +406,19 @@ fun ProfileScreen(
                 colorIcono = RojoError,
                 mostrarFlecha = false,
                 onClick = {
-                    SessionManager.cerrarSesion()
-                    onCerrarSesion()
+                    alcance.launch {
+                        Repositorio.actual.cerrarSesion()      // borra el token guardado en el teléfono
+                        Preferencias.ubicacion = null
+                        SessionManager.cerrarSesion()
+                        onCerrarSesion()
+                    }
                 },
             )
         }
 
         Spacer(Modifier.height(16.dp))
         Text(
-            "EnZona · versión 0.3.0 (piloto)",
+            "EnZona · versión 0.5.0 (piloto)" + if (Repositorio.esDemostracion) " · datos de prueba" else "",
             color = TextoSecundario, style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.fillMaxWidth(),
         )

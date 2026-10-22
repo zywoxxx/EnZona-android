@@ -38,7 +38,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.uv.enzona.data.MockRepository
+import com.uv.enzona.data.Repositorio
+import com.uv.enzona.data.model.PoliticaCancelacion
+import com.uv.enzona.ui.components.ContenidoCarga
+import com.uv.enzona.ui.components.rememberCarga
+import com.uv.enzona.ui.components.rememberOperacion
+import com.uv.enzona.ui.components.Operacion
 import com.uv.enzona.data.SessionManager
 import com.uv.enzona.data.model.EstadoEvento
 import com.uv.enzona.data.model.EstadoUsuario
@@ -70,43 +75,54 @@ fun AdminScreen() {
     ) {
         Column(Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp)) {
             Text("Administración", style = MaterialTheme.typography.headlineMedium, color = TextoPrincipal)
-            Text("Usuarios y eventos de la plataforma", color = TextoSecundario)
+            Text("Resumen, usuarios y eventos de la plataforma", color = TextoSecundario)
         }
         Spacer(Modifier.height(12.dp))
 
+        val pestanas = listOf("Resumen", "Usuarios", "Eventos")
         TabRow(
             selectedTabIndex = pestana,
             containerColor = MoradoFondo,
             contentColor = NaranjaAcento
         ) {
-            Tab(selected = pestana == 0, onClick = { pestana = 0 },
-                text = { Text("Usuarios", color = if (pestana == 0) NaranjaAcento else TextoSecundario) })
-            Tab(selected = pestana == 1, onClick = { pestana = 1 },
-                text = { Text("Eventos", color = if (pestana == 1) NaranjaAcento else TextoSecundario) })
+            pestanas.forEachIndexed { indice, titulo ->
+                Tab(selected = pestana == indice, onClick = { pestana = indice },
+                    text = { Text(titulo, color = if (pestana == indice) NaranjaAcento else TextoSecundario) })
+            }
         }
 
-        if (pestana == 0) PestanaUsuarios() else PestanaEventos()
+        when (pestana) {
+            0 -> PestanaEstadisticas()
+            1 -> PestanaUsuarios()
+            else -> PestanaEventos()
+        }
     }
 }
 
 @Composable
 private fun PestanaUsuarios() {
-    val usuarios = MockRepository.usuarios
+    val carga = rememberCarga { Repositorio.actual.usuarios() }
+    val operacion = rememberOperacion()
     val propioId = SessionManager.usuarioId
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        items(usuarios, key = { it.id }) { usuario ->
-            TarjetaUsuario(usuario, esPropio = usuario.id == propioId)
+    ContenidoCarga(carga, textoCargando = "Cargando cuentas…") { usuarios ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            operacion.error?.let { mensaje ->
+                item(key = "error") { Text(mensaje, color = RojoError, style = MaterialTheme.typography.bodyMedium) }
+            }
+            items(usuarios, key = { it.id }) { usuario ->
+                TarjetaUsuario(usuario, esPropio = usuario.id == propioId, operacion = operacion)
+            }
         }
     }
 }
 
 @Composable
-private fun TarjetaUsuario(usuario: Usuario, esPropio: Boolean) {
+private fun TarjetaUsuario(usuario: Usuario, esPropio: Boolean, operacion: Operacion) {
     val bloqueado = usuario.estado == EstadoUsuario.BLOQUEADO
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -142,13 +158,19 @@ private fun TarjetaUsuario(usuario: Usuario, esPropio: Boolean) {
             Spacer(Modifier.height(10.dp))
             Text("Roles", color = TextoSecundario, style = MaterialTheme.typography.labelMedium)
             Spacer(Modifier.height(4.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            // La API de EnZona no permite asignar roles desde la administración: se muestran sin editar
+            if (!Repositorio.actual.capacidades.rolesPorAdministrador) {
+                Text(
+                    usuario.roles.joinToString { it.name.lowercase().replaceFirstChar { c -> c.uppercase() } },
+                    color = TextoPrincipal, style = MaterialTheme.typography.bodyMedium,
+                )
+            } else Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Rol.entries.forEach { rol ->
                     val activo = rol in usuario.roles
                     FilterChip(
                         selected = activo,
-                        enabled = !esPropio,
-                        onClick = { MockRepository.asignarRol(usuario.id, rol, !activo) },
+                        enabled = !esPropio && !operacion.enCurso,
+                        onClick = { operacion.ejecutar<Any> { Repositorio.actual.asignarRol(usuario.id, rol, !activo) } },
                         label = {
                             Text(
                                 rol.name.take(4).lowercase().replaceFirstChar { it.uppercase() },
@@ -167,12 +189,14 @@ private fun TarjetaUsuario(usuario: Usuario, esPropio: Boolean) {
 
             if (!esPropio) {
                 Spacer(Modifier.height(4.dp))
-                TextButton(onClick = {
-                    MockRepository.cambiarEstadoUsuario(
-                        usuario.id,
-                        if (bloqueado) EstadoUsuario.ACTIVO else EstadoUsuario.BLOQUEADO
-                    )
-                }) {
+                TextButton(
+                    enabled = !operacion.enCurso,
+                    onClick = {
+                        operacion.ejecutar<Any> {
+                            Repositorio.actual.cambiarEstadoUsuario(usuario.id, if (bloqueado) EstadoUsuario.ACTIVO else EstadoUsuario.BLOQUEADO)
+                        }
+                    },
+                ) {
                     Text(
                         if (bloqueado) "Desbloquear cuenta" else "Bloquear cuenta",
                         color = if (bloqueado) VerdeOk else RojoError
@@ -191,24 +215,26 @@ private fun TarjetaUsuario(usuario: Usuario, esPropio: Boolean) {
 
 @Composable
 private fun PestanaEventos() {
-    val eventos = MockRepository.eventos
+    val carga = rememberCarga { Repositorio.actual.todosLosEventos() }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        items(eventos, key = { it.id }) { evento ->
-            TarjetaEventoAdmin(evento)
+    ContenidoCarga(carga, textoCargando = "Cargando eventos…") { eventos ->
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(eventos, key = { it.id }) { evento ->
+                TarjetaEventoAdmin(evento)
+            }
         }
     }
 }
 
 @Composable
 private fun TarjetaEventoAdmin(evento: Evento) {
-    val organizador = MockRepository.usuarios.find { it.id == evento.organizadorId }
-    val sinBoletos = MockRepository.puedeCambiarAsientos(evento.id)
-    val butacas = MockRepository.asientosDe(evento.id).size
+    val sinBoletos = !evento.tieneBoletos
+    val butacas = if (evento.requiereAsiento) evento.aforo else 0
+    val operacion = rememberOperacion()
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -228,9 +254,20 @@ private fun TarjetaEventoAdmin(evento: Evento) {
                 EtiquetaEstado(evento.estado)
             }
             Text(
-                "Organiza: ${organizador?.nombre ?: "—"}",
+                "Organiza: ${evento.organizadorNombre ?: "—"}",
                 color = TextoSecundario, style = MaterialTheme.typography.bodyMedium
             )
+            // Red de seguridad humana tras la moderación automática: el administrador retira una portada inapropiada
+            if (evento.imagenUrl != null) {
+                val quitarPortada = rememberOperacion()
+                TextButton(
+                    enabled = !quitarPortada.enCurso,
+                    onClick = { quitarPortada.ejecutar<Evento> { Repositorio.actual.quitarImagenEvento(evento.id) } },
+                ) {
+                    Text(if (quitarPortada.enCurso) "Quitando portada…" else "Quitar portada", color = RojoError, style = MaterialTheme.typography.labelMedium)
+                }
+                quitarPortada.error?.let { Text(it, color = RojoError, style = MaterialTheme.typography.labelMedium) }
+            }
             Text(
                 "${evento.lugar} · ${FechaEvento.corto(evento.fecha)} · ${evento.vendidos}/${evento.aforo} lugares",
                 color = TextoSecundario, style = MaterialTheme.typography.bodyMedium
@@ -262,18 +299,16 @@ private fun TarjetaEventoAdmin(evento: Evento) {
                     }
                     Switch(
                         checked = evento.requiereAsiento,
-                        enabled = sinBoletos,
+                        enabled = sinBoletos && !operacion.enCurso &&
+                            evento.estado != EstadoEvento.CANCELADO && evento.estado != EstadoEvento.REALIZADO,
                         onCheckedChange = { activar ->
-                            if (activar) {
-                                // Distribución automática a partir del aforo actual:
-                                // filas de 12 butacas hasta cubrirlo
-                                val porFila = 12
-                                val filas = ((evento.aforo + porFila - 1) / porFila).coerceIn(1, 26)
-                                MockRepository.activarAsientos(
-                                    evento.id, listOf(LayoutSeccion("General", filas, porFila))
+                            // Distribución automática a partir del aforo actual: filas de 12 butacas hasta cubrirlo
+                            val porFila = 12
+                            val filas = ((evento.aforo + porFila - 1) / porFila).coerceIn(1, 26)
+                            operacion.ejecutar<Any> {
+                                Repositorio.actual.cambiarAsientos(
+                                    evento.id, if (activar) listOf(LayoutSeccion("General", filas, porFila)) else emptyList(),
                                 )
-                            } else {
-                                MockRepository.desactivarAsientos(evento.id)
                             }
                         },
                         colors = SwitchDefaults.colors(
@@ -292,52 +327,75 @@ private fun TarjetaEventoAdmin(evento: Evento) {
                     color = if (!sinBoletos) AmarilloAcento else TextoSecundario,
                     style = MaterialTheme.typography.labelMedium
                 )
+                operacion.error?.let { Text(it, color = RojoError, style = MaterialTheme.typography.labelMedium) }
             }
 
             // ---- Cancelación administrativa (RF-18 + RF-14): motivo obligatorio, sin comisión ----
-            val politica = MockRepository.politicaCancelacionDe(evento.id, administrativa = true)
-            var confirmar by remember { androidx.compose.runtime.mutableStateOf(false) }
+            // La política se pide al servidor al tocar «Cancelar evento»: una consulta por evento al cargar
+            // la lista sería un desperdicio.
+            var politica by remember { androidx.compose.runtime.mutableStateOf<PoliticaCancelacion?>(null) }
             var errorCancelacion by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
             var resultado by remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+            val cancelacion = rememberOperacion()
+            val yaComenzo = !evento.fecha.isAfter(FechaEvento.ahora())
             if (evento.estado == EstadoEvento.CANCELADO) {
                 Text(
                     listOfNotNull(
                         "Cancelado",
-                        evento.canceladoPor?.let { id -> MockRepository.usuarios.find { it.id == id }?.let { "por ${it.nombre}" } },
+                        evento.canceladoPorNombre?.let { "por $it" },
                         evento.motivoCancelacion?.let { "· $it" },
                     ).joinToString(" "),
                     color = RojoError, style = MaterialTheme.typography.labelMedium,
                     modifier = Modifier.padding(top = 8.dp),
                 )
-            } else if (evento.estado != EstadoEvento.REALIZADO && politica != null) {
-                TextButton(onClick = { errorCancelacion = null; confirmar = true }, enabled = politica.permitida) {
-                    Text("Cancelar evento", color = if (politica.permitida) RojoError else TextoSecundario)
+            } else if (evento.estado != EstadoEvento.REALIZADO) {
+                TextButton(
+                    enabled = !yaComenzo && !cancelacion.enCurso,
+                    onClick = {
+                        errorCancelacion = null
+                        cancelacion.ejecutar(
+                            alTerminar = { p: PoliticaCancelacion -> politica = p },
+                            alFallar = { errorCancelacion = it.message },
+                        ) { Repositorio.actual.politicaCancelacion(evento.id, administrativa = true) }
+                    },
+                ) {
+                    Text(
+                        if (cancelacion.enCurso && politica == null) "Consultando…" else "Cancelar evento",
+                        color = if (!yaComenzo) RojoError else TextoSecundario,
+                    )
                 }
-                if (!politica.permitida) {
-                    Text(politica.motivoBloqueo ?: "", color = TextoSecundario, style = MaterialTheme.typography.labelMedium)
+                if (yaComenzo) {
+                    Text(
+                        "El evento ya comenzó. No se puede cancelar; solo puede quedar como finalizado.",
+                        color = TextoSecundario, style = MaterialTheme.typography.labelMedium,
+                    )
                 }
             }
             if (resultado != null) {
                 Text(resultado!!, color = VerdeOk, style = MaterialTheme.typography.labelMedium)
             }
-            if (confirmar && politica != null) {
+            if (errorCancelacion != null && politica == null) {
+                Text(errorCancelacion!!, color = RojoError, style = MaterialTheme.typography.labelMedium)
+            }
+            politica?.let { vigente ->
                 com.uv.enzona.ui.components.DialogoCancelarEvento(
                     nombreEvento = evento.nombre,
-                    politica = politica,
+                    politica = vigente,
                     administrativa = true,
-                    procesando = false,
+                    procesando = cancelacion.enCurso,
                     error = errorCancelacion,
-                    onCancelar = { confirmar = false },
+                    onCancelar = { if (!cancelacion.enCurso) { politica = null; errorCancelacion = null } },
                     onConfirmar = { motivo ->
-                        MockRepository.cancelarEvento(
-                            eventoId = evento.id,
-                            ejecutadoPor = SessionManager.usuarioId,
-                            motivo = motivo,
-                            administrativa = true,
-                        ).onSuccess { r ->
-                            confirmar = false
-                            resultado = "Cancelado: ${r.boletosAnulados} boletos anulados, ${com.uv.enzona.util.Formato.importeMxn(r.importeReembolsado.toDouble())} reembolsados, sin comisión al organizador."
-                        }.onFailure { errorCancelacion = it.message }
+                        errorCancelacion = null
+                        cancelacion.ejecutar(
+                            alTerminar = { r: com.uv.enzona.data.model.ResultadoCancelacion ->
+                                politica = null
+                                resultado = "Cancelado: ${r.boletosAnulados} boletos anulados, ${com.uv.enzona.util.Formato.importeMxn(r.importeReembolsado.toDouble())} reembolsados, sin comisión al organizador."
+                            },
+                            alFallar = { errorCancelacion = it.message },
+                        ) {
+                            Repositorio.actual.cancelarEvento(evento.id, motivo = motivo, aceptaComision = false, administrativa = true)
+                        }
                     },
                 )
             }

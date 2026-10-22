@@ -316,7 +316,8 @@ fun MiniMapaEvento(
 // ------------------------------------------------------------------ utilidades
 
 /** Última ubicación conocida o una lectura única (sin Play Services; API 26+). */
-private fun obtenerUbicacion(contexto: Context, callback: (Location?) -> Unit) {
+/** Última ubicación conocida o una lectura nueva. Exige que el permiso ya esté concedido. */
+internal fun obtenerUbicacion(contexto: Context, callback: (Location?) -> Unit) {
     val lm = contexto.getSystemService(Context.LOCATION_SERVICE) as? LocationManager ?: return callback(null)
     val proveedores = listOf(LocationManager.GPS_PROVIDER, LocationManager.NETWORK_PROVIDER).filter { lm.isProviderEnabled(it) }
     if (proveedores.isEmpty()) return callback(null)
