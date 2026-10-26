@@ -53,6 +53,10 @@ import com.uv.enzona.util.ImagenPortada
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.AssistChip
 import com.uv.enzona.data.Guias
 import com.uv.enzona.ui.components.GuiaDePantalla
 import com.uv.enzona.ui.components.PasoGuia
@@ -131,6 +135,8 @@ private fun Formulario(eventoId: Long?, datos: DatosFormulario, onVolver: () -> 
     var direccion by rememberSaveable { mutableStateOf(existente?.direccion ?: "") }
     // Última dirección propuesta por el mapa: permite distinguir texto automático de texto escrito por el usuario
     var direccionSugerida by rememberSaveable { mutableStateOf<String?>(null) }
+    // true desde que la persona toca/arrastra el mapa hasta que llega la dirección de ese punto
+    var eligioEnMapa by rememberSaveable { mutableStateOf(false) }
     var categoria by rememberSaveable { mutableStateOf(existente?.categoria?.takeIf { it in CATEGORIAS } ?: CATEGORIAS.first()) }
     var esDePago by rememberSaveable { mutableStateOf(existente?.esDePago ?: false) }
     var precio by rememberSaveable { mutableStateOf(existente?.precioDesde?.takeIf { it > 0 }?.let { "%.0f".format(it) } ?: "") }
@@ -402,16 +408,27 @@ private fun Formulario(eventoId: Long?, datos: DatosFormulario, onVolver: () -> 
                 Spacer(Modifier.height(Espacio.s))
                 CampoEnZona(lugar, { lugar = it }, "Lugar (nombre del recinto)")
                 Spacer(Modifier.height(Espacio.s))
-                CampoEnZona(direccion, { direccion = it }, "Dirección", ayuda = "Puedes editar la dirección sugerida por el mapa.")
+                CampoEnZona(direccion, { direccion = it }, "Dirección", ayuda = "Al tocar el mapa se llena con la dirección de ese punto; después puedes editarla.")
+                val sugerenciaPendiente = direccionSugerida?.takeIf { it.isNotBlank() && it != direccion.trim() }
+                if (sugerenciaPendiente != null) {
+                    Spacer(Modifier.height(Espacio.xs))
+                    AssistChip(
+                        onClick = { direccion = sugerenciaPendiente },
+                        label = { Text("Usar la dirección del mapa", maxLines = 1) },
+                        leadingIcon = { Icon(Icons.Filled.Place, contentDescription = null, modifier = Modifier.size(AssistChipDefaults.IconSize)) },
+                    )
+                }
                 Spacer(Modifier.height(Espacio.m))
                 SelectorUbicacionMapa(
                     latitud = latitud, longitud = longitud,
-                    onCambio = { lat, lon -> latitud = lat; longitud = lon; error = null },
+                    onCambio = { lat, lon -> latitud = lat; longitud = lon; eligioEnMapa = true; error = null },
                     onSugerenciaDireccion = { sugerida ->
-                        // Se actualiza al mover el marcador salvo que el usuario haya editado la dirección a mano:
-                        // si el campo está vacío o aún contiene la sugerencia anterior, se reemplaza; si no, se respeta.
-                        if (direccion.isBlank() || direccion == direccionSugerida) direccion = sugerida
+                        // Si la persona acaba de elegir el punto en el mapa, la dirección de ese punto sustituye
+                        // lo escrito (antes había que borrar el campo a mano). Al abrir un evento existente el
+                        // mapa también sugiere, pero ahí se respeta la dirección guardada salvo que esté vacía.
+                        if (eligioEnMapa || direccion.isBlank() || direccion == direccionSugerida) direccion = sugerida
                         direccionSugerida = sugerida
+                        eligioEnMapa = false
                     },
                 )
                 Spacer(Modifier.height(Espacio.s))

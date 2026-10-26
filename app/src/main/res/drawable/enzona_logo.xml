@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logo EnZona v1.2 (logoenzonav-svg.svg del diseñador) convertido a vector: la máscara de
+     muescas es un path evenOdd, las líneas punteadas son trazos cortos y la inclinación del
+     texto (skewX -8°) ya está aplicada a las coordenadas. Ver scratchpad svg_a_vector.py. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="276dp"
+    android:height="76dp"
+    android:viewportWidth="1382"
+    android:viewportHeight="380">
+    <path android:fillColor="#1B819C" android:pathData="M 180 6 C 274 6, 342 76, 342 168 C 342 238, 297 290, 269 322 C 245 348, 226 374, 180 374 C 134 374, 115 348, 91 322 C 63 290, 18 238, 18 168 C 18 76, 86 6, 180 6 Z" />
+    <path android:fillColor="#03223F" android:pathData="M 180 25 C 256 25, 318 86, 318 168 C 318 228, 278 275, 255 305 C 236 330, 217 353, 180 353 C 143 353, 124 330, 105 305 C 82 275, 42 228, 42 168 C 42 86, 104 25, 180 25 Z" />
+    <path android:fillColor="#1C4E78" android:fillType="evenOdd" android:pathData="M 52 168 A 128 128 0 1 0 308 168 A 128 128 0 1 0 52 168 Z M 30 168 A 22 22 0 1 0 74 168 A 22 22 0 1 0 30 168 Z M 286 168 A 22 22 0 1 0 330 168 A 22 22 0 1 0 286 168 Z M 173 40 A 7 7 0 1 0 187 40 A 7 7 0 1 0 173 40 Z M 173 296 A 7 7 0 1 0 187 296 A 7 7 0 1 0 173 296 Z" />
+    <group android:translateX="180" android:translateY="168" android:rotation="-45">
+        <group android:translateX="-75" android:translateY="-45">
+            <path android:fillColor="#FFFFFF" android:pathData="M 0 0 H 150 V 30 A 15 15 0 0 0 150 60 V 90 H 0 V 60 A 15 15 0 0 0 0 30 Z" />
+            <path android:strokeColor="#1C4E78" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M 34 8.00 V 14.00 M 34 19.00 V 25.00 M 34 30.00 V 36.00 M 34 41.00 V 47.00 M 34 52.00 V 58.00 M 34 63.00 V 69.00 M 34 74.00 V 80.00" />
+            <path android:strokeColor="#1C4E78" android:strokeWidth="4.5" android:strokeLineCap="round" android:pathData="M 116 8.00 V 14.00 M 116 19.00 V 25.00 M 116 30.00 V 36.00 M 116 41.00 V 47.00 M 116 52.00 V 58.00 M 116 63.00 V 69.00 M 116 74.00 V 80.00" />
+            <path android:strokeColor="#661C4E78" android:strokeWidth="2.5" android:pathData="M 44 14 H 106 V 76 H 44 Z" />
+        </group>
+    </group>
+    <path android:fillColor="#21416E" android:fillType="evenOdd" android:pathData="M399.49 83 L509.49 83 C523.49 83 530.36 91 528.54 104 C526.71 117 517.58 125 503.58 125 L423.58 125 L419.65 153 C431.8 153 440.26 162.85 438.56 175 C436.85 187.15 425.62 197 413.46 197 L409.39 226 L489.39 226 C503.39 226 510.26 234 508.44 247 C506.61 260 497.49 268 483.49 268 L373.49 268 C351.49 268 341.45 254 344.55 232 L360.43 119 C363.52 97 377.49 83 399.49 83 Z" />
+    <path android:strokeColor="#21416E" android:strokeWidth="9" android:pathData="M 492.60 132.00 L 491.19 142.00 M 490.07 150.00 L 488.66 160.00 M 487.54 168.00 L 486.14 178.00 M 485.01 186.00 L 483.61 196.00 M 482.48 204.00 L 481.08 214.00" />
+    <path android:fillColor="#21416E" android:fillType="evenOdd" android:pathData="M547.44 126 L587.44 126 L584.91 144 C599.02 129 618.01 122 640.01 122 C674.01 122 690.91 144 685.85 180 L673.49 268 L629.49 268 L640.73 188 C643.82 166 634.23 156 617.23 156 C598.23 156 585.54 168 582.45 190 L571.49 268 L527.49 268 Z" />
+    <path android:fillColor="#3489B1" android:fillType="evenOdd" android:pathData="M723.49 83 L853.49 83 C867.49 83 873.94 94 862.97 108 L763.11 228 L835.11 228 C847.11 228 853.98 236 852.3 248 C850.61 260 841.49 268 829.49 268 L700.49 268 C686.49 268 680.03 257 691 243 L790.86 123 L717.86 123 C705.86 123 698.99 115 700.68 103 C702.36 91 711.49 83 723.49 83 Z" />
+    <path android:fillColor="#3489B1" android:fillType="evenOdd" android:pathData="M954.01 122 C1000.01 122 1027.79 152 1021.61 196 C1014.58 246 928.99 300 928.99 300 C928.99 300 858.58 246 865.61 196 C871.79 152 908.01 122 954.01 122 Z M948.66 160 C929.89 160.03 912.56 175.26 909.93 194.02 C907.31 212.79 920.39 228 939.16 228 C957.93 228 975.28 212.79 977.93 194.02 C980.58 175.26 967.53 160.03 948.76 160 Z" />
+    <path android:fillColor="#3489B1" android:fillType="evenOdd" android:pathData="M1051.44 126 L1091.44 126 L1088.91 144 C1103.02 129 1122.01 122 1144.01 122 C1178.01 122 1194.91 144 1189.85 180 L1177.49 268 L1133.49 268 L1144.73 188 C1147.82 166 1138.23 156 1121.23 156 C1102.23 156 1089.54 168 1086.45 190 L1075.49 268 L1031.49 268 Z" />
+    <path android:fillColor="#3489B1" android:fillType="evenOdd" android:pathData="M1288.01 122 C1248.01 122 1216.07 150 1209.75 195 C1203.42 240 1227.21 270 1267.21 270 C1287.21 270 1304.33 262 1316.3 248 L1313.49 268 L1355.49 268 L1375.44 126 L1333.44 126 L1330.91 144 C1322.88 130 1308.01 122 1288.01 122 Z M1292.95 158 C1314.95 158 1326.84 173 1323.61 196 C1320.37 219 1304.26 234 1282.26 234 C1260.26 234 1248.37 219 1251.61 196 C1254.84 173 1270.95 158 1292.95 158 Z" />
+</vector>

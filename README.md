@@ -51,6 +51,27 @@ diagrama de casos de uso —**asistente**, **organizador**, **validador** y
   grande; arriba quedan el evento, el chip «Con internet / Sin conexión», el
   botón «Enviar N» de validaciones pendientes y los contadores de la jornada;
   «Escribir código» abre un diálogo y «Últimos accesos» se despliega.
+- **Identidad visual v1.2**: ícono de la app nuevo (adaptable, fondo azul marino
+  `#002746`, `mipmap-anydpi-v26`) y logo nuevo en Login e Inicio como vector
+  (`drawable/enzona_logo.xml`, convertido del SVG del diseñador con
+  `docs/figma_v3/svg_a_vector.py`: la máscara de muescas pasa a un path evenOdd,
+  las líneas punteadas a trazos cortos y la inclinación del texto se aplica a las
+  coordenadas; el lienzo se amplía a 1382 porque el viewBox original cortaba la «a»).
+- **Animación de conexión**: al abrir la app, mientras se recupera la sesión con
+  la API, el logo se arma por partes sobre azul muy claro (`AzulCielo`): se traza
+  el contorno del pin, se llena el disco, el boleto aparece con un rebote y entra
+  el nombre; el ciclo se repite mientras dure la espera y se deja terminar al
+  menos una vez (`ui/components/AnimacionConexion.kt`, línea de tiempo pura
+  `fasesConexion` con pruebas). El splash del sistema (Android 12+) usa el mismo
+  azul para que el paso sea continuo.
+- **Inicio**: título «Eventos cerca de ti» un punto más pequeño y la campana de
+  notificaciones de vuelta, dibujada como boleto (`drawable/ic_campana_boleto.xml`:
+  azul EnZona, muescas y línea de perforación). Con la API de EnZona no hay centro
+  de notificaciones, así que la pantalla explica que los avisos llegan por correo.
+- **Dirección del evento**: al tocar o arrastrar el marcador del mapa, la dirección
+  de ese punto sustituye lo escrito en «Dirección» (antes había que borrar el campo
+  a mano); al abrir un evento existente se respeta la dirección guardada, y si se
+  edita a mano después aparece el chip «Usar la dirección del mapa».
 - **`Capacidades`**: lo que la API no implementa (métodos de pago guardados,
   OXXO/SPEI, centro de notificaciones, comisión de cancelación, roles por
   administrador, «marcar como finalizado») se declara y la interfaz lo oculta.

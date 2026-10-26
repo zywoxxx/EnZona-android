@@ -40,7 +40,9 @@ import com.uv.enzona.data.Repositorio
 import com.uv.enzona.data.SessionManager
 import com.uv.enzona.ui.components.Carga
 import com.uv.enzona.ui.components.EtiquetaDatosDePrueba
-import com.uv.enzona.ui.components.PantallaCargando
+import com.uv.enzona.ui.components.PantallaConectando
+import com.uv.enzona.ui.components.TiemposConexion
+import kotlinx.coroutines.delay
 import com.uv.enzona.ui.components.PantallaError
 import com.uv.enzona.ui.components.mensajeDe
 import com.uv.enzona.data.ErrorEnZona
@@ -143,6 +145,9 @@ class MainActivity : ComponentActivity() {
 /** Rutas que se pueden ver sin sesión. */
 private val RUTAS_DE_ACCESO = setOf(Rutas.LOGIN, Rutas.LOGIN_PERSONAL, Rutas.REGISTRO, Rutas.OTP, Rutas.PRIVACIDAD)
 
+/** Tiempo mínimo de la pantalla de conexión: el logo alcanza a armarse completo (ver [TiemposConexion]). */
+private const val DURACION_MINIMA_CONEXION_MS = TiemposConexion.TEXTO_FIN + 250
+
 @Composable
 fun AppEnZona() {
     // Al abrir la app se recupera la sesión guardada (token cifrado) con GET /api/usuarios/me
@@ -150,7 +155,8 @@ fun AppEnZona() {
     var intento by remember { mutableStateOf(0) }
     LaunchedEffect(intento) {
         arranque = Carga.Cargando
-        arranque = try {
+        val inicio = System.currentTimeMillis()
+        val resultado = try {
             val repositorio = Repositorio.actual
             repositorio.restaurarSesion()?.let { usuario ->
                 SessionManager.iniciarSesion(usuario, comoPersonal = repositorio.sesionDePersonal() && usuario.esPersonal)
@@ -159,10 +165,13 @@ fun AppEnZona() {
         } catch (e: Exception) {
             Carga.Fallo(mensajeDe(e), (e as? ErrorEnZona)?.sinConexion == true)
         }
+        // La animación del logo se deja terminar aunque el servidor conteste en milisegundos
+        delay(DURACION_MINIMA_CONEXION_MS - (System.currentTimeMillis() - inicio))
+        arranque = resultado
     }
     when (val a = arranque) {
         is Carga.Cargando -> {
-            Scaffold { relleno -> PantallaCargando("Abriendo EnZona…", Modifier.padding(relleno)) }
+            PantallaConectando()
             return
         }
         is Carga.Fallo -> {

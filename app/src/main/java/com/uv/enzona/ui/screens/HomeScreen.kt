@@ -51,6 +51,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.lazy.itemsIndexed
 import com.uv.enzona.data.Guias
@@ -296,8 +297,8 @@ private fun Encabezado(
     onCambiarZona: () -> Unit,
     noLeidas: Int = 0,
     onNotificaciones: () -> Unit = {},
-    /** false cuando la fuente de datos no tiene centro de notificaciones (API de EnZona: avisa por correo). */
-    mostrarNotificaciones: Boolean = true,
+    /** Se conserva por compatibilidad: la campana se muestra siempre; sin centro de notificaciones la pantalla lo explica. */
+    @Suppress("UNUSED_PARAMETER") mostrarNotificaciones: Boolean = true,
 ) {
     Column {
         Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -305,18 +306,18 @@ private fun Encabezado(
                 painter = androidx.compose.ui.res.painterResource(com.uv.enzona.R.drawable.enzona_logo),
                 contentDescription = "EnZona",
                 modifier = Modifier
-                    .height(40.dp)
+                    .height(54.dp)
                     .weight(1f),
                 contentScale = androidx.compose.ui.layout.ContentScale.Fit,
                 alignment = Alignment.CenterStart,
             )
-            if (mostrarNotificaciones) BotonNotificaciones(noLeidas = noLeidas, onClick = onNotificaciones)
+            BotonNotificaciones(noLeidas = noLeidas, onClick = onNotificaciones)
         }
         Spacer(Modifier.height(Espacio.xs))
         Text(
             "Eventos cerca de ti",
             color = MaterialTheme.colorScheme.onBackground,
-            style = MaterialTheme.typography.headlineMedium,
+            style = MaterialTheme.typography.headlineSmall,
         )
         Spacer(Modifier.height(Espacio.xs))
         TextButton(
@@ -357,9 +358,10 @@ fun BotonNotificaciones(noLeidas: Int, onClick: () -> Unit) {
             },
         ) {
             Icon(
-                if (noLeidas > 0) Icons.Filled.NotificationsActive else Icons.Filled.Notifications,
+                painter = androidx.compose.ui.res.painterResource(com.uv.enzona.R.drawable.ic_campana_boleto),
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurface,
+                tint = androidx.compose.ui.graphics.Color.Unspecified,
+                modifier = Modifier.size(30.dp),
             )
         }
     }

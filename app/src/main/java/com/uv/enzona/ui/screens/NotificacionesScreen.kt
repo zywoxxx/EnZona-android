@@ -84,6 +84,8 @@ fun NotificacionesScreen(
 
     // Al marcar como leída se vuelven a pedir (rememberCarga observa los cambios)
     val carga = rememberCarga { Repositorio.actual.notificaciones() }
+    // Con la API de EnZona no hay centro de notificaciones: los avisos van por correo y la pantalla lo explica
+    val conCentro = Repositorio.actual.capacidades.notificaciones
     val operacion = rememberOperacion()
     val propias = carga.valor.orEmpty()
     val visibles = propias.filter { it.tipo in filtro.tipos }
@@ -170,13 +172,14 @@ fun NotificacionesScreen(
                     EstadoVacio(
                         icono = Icons.Filled.NotificationsNone,
                         titulo = when (filtro) {
-                            FiltroNotificacion.TODAS -> "Sin notificaciones"
+                            FiltroNotificacion.TODAS -> if (conCentro) "Sin notificaciones" else "Tus avisos llegan por correo"
                             FiltroNotificacion.PROXIMOS -> "No tienes eventos próximos"
                             FiltroNotificacion.CANCELADOS -> "Ningún evento cancelado"
                             FiltroNotificacion.COMPRAS -> "Aún no hay compras"
                         },
                         texto = when (filtro) {
-                            FiltroNotificacion.TODAS -> "Aquí verás los recordatorios de tus eventos, las cancelaciones y tus compras confirmadas."
+                            FiltroNotificacion.TODAS -> if (conCentro) "Aquí verás los recordatorios de tus eventos, las cancelaciones y tus compras confirmadas."
+                            else "EnZona te envía al correo el boleto con su QR, los recordatorios y cualquier cambio o cancelación de tus eventos. Revisa tu bandeja (y la carpeta de no deseados)."
                             FiltroNotificacion.PROXIMOS -> "Te avisaremos ${MockRepository.DIAS_RECORDATORIO} días antes de cada evento para el que tengas boleto."
                             FiltroNotificacion.CANCELADOS -> "Si un organizador cancela un evento con tu boleto, lo verás aquí con el estado del reembolso."
                             FiltroNotificacion.COMPRAS -> "Cada compra o confirmación de asistencia genera un aviso con acceso directo al QR."

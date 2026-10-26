@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Android 12+: el splash del sistema (ícono sobre fondo) usa el mismo azul claro
+         que la animación de conexión (AzulCielo en Compose), para que el paso sea continuo. -->
+    <style name="Theme.EnZona" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#EEF1F6</item>
+        <item name="android:statusBarColor">#EEF1F6</item>
+        <item name="android:navigationBarColor">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:windowSplashScreenBackground">#E4F2FA</item>
+    </style>
+</resources>
