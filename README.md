@@ -72,6 +72,16 @@ diagrama de casos de uso —**asistente**, **organizador**, **validador** y
   de ese punto sustituye lo escrito en «Dirección» (antes había que borrar el campo
   a mano); al abrir un evento existente se respeta la dirección guardada, y si se
   edita a mano después aparece el chip «Usar la dirección del mapa».
+- **Correo real con Resend**: el API envía por Resend (SMTP) el código de
+  verificación, los boletos con su QR y los avisos de cambio o cancelación; la
+  app no habla con Resend, pero se adaptó al correo real: el registro avisa que
+  llegará un código y ya no pide teléfono (`Capacidades.verificacionPorTelefono`,
+  false con la API porque no hay SMS y la cuenta quedaría pendiente), la pantalla
+  de verificación cuenta 60 s antes de permitir «Reenviar código» (la API
+  descarta en silencio los reenvíos más seguidos), separa el error de reenvío del
+  de verificación y explica si la cuenta tiene un teléfono pendiente; el detalle
+  del boleto y la ayuda indican revisar la carpeta de no deseados. Configuración
+  del API en `docs/CORREO_RESEND.md` de EnZona_Api (rama `feature/correo-resend`).
 - **`Capacidades`**: lo que la API no implementa (métodos de pago guardados,
   OXXO/SPEI, centro de notificaciones, comisión de cancelación, roles por
   administrador, «marcar como finalizado») se declara y la interfaz lo oculta.

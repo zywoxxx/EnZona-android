@@ -245,6 +245,8 @@ data class Capacidades(
     val rolesPorAdministrador: Boolean = true,
     /** El organizador marca a mano un evento como realizado. */
     val marcarRealizado: Boolean = true,
+    /** La API envía un código por SMS al teléfono; sin proveedor de SMS la app no pide teléfono. */
+    val verificacionPorTelefono: Boolean = true,
 )
 
 /**

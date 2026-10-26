@@ -181,8 +181,8 @@ fun TicketDetailScreen(boletoId: Long, onVolver: () -> Unit, onAbrirBoleto: ((Lo
 
             Spacer(Modifier.height(Espacio.l))
 
-            // RF-12: en producción el backend envía el boleto por correo al emitirlo.
-            // Aquí solo se abre la app de correo del teléfono; no hay servicio de envío.
+            // RF-12: la API envía el boleto por correo (Resend) al emitirlo. Este botón es una
+            // copia local: abre la app de correo del teléfono con los datos del boleto.
             BotonSecundario(
                 texto = "Enviar con mi app de correo",
                 icono = Icons.Filled.MailOutline,
@@ -215,7 +215,10 @@ fun TicketDetailScreen(boletoId: Long, onVolver: () -> Unit, onAbrirBoleto: ((Lo
             if (correoAbierto) {
                 Spacer(Modifier.height(Espacio.s))
                 Aviso(
-                    texto = "Se abrió tu aplicación de correo con los datos del boleto. EnZona todavía no envía boletos por sí misma: el envío automático llegará con el backend.",
+                    texto = if (Repositorio.esDemostracion)
+                        "Se abrió tu aplicación de correo con los datos del boleto. EnZona todavía no envía boletos por sí misma: el envío automático llegará con el backend."
+                    else
+                        "Se abrió tu aplicación de correo con los datos del boleto. EnZona también te lo envió por correo cuando lo obtuviste; si no lo ves, revisa la carpeta de no deseados.",
                     tono = Tono.Neutro,
                 )
             }

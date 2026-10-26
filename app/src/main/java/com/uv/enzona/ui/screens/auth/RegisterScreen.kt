@@ -63,6 +63,8 @@ fun RegisterScreen(onVolver: () -> Unit, onRegistrado: (Long) -> Unit, onVerPriv
     var curpDuplicada by remember { mutableStateOf<String?>(null) }
     var telefonoDuplicado by remember { mutableStateOf<String?>(null) }
     val operacion = rememberOperacion()
+    // Sin proveedor de SMS el teléfono no se pide: exigiría un código que nunca llegaría
+    val pideTelefono = Repositorio.actual.capacidades.verificacionPorTelefono
 
     // Validaciones (solo se muestran después del primer intento)
     val errNombre = if (intentado && nombre.isBlank()) "Escribe tu nombre completo." else null
@@ -73,6 +75,7 @@ fun RegisterScreen(onVolver: () -> Unit, onRegistrado: (Long) -> Unit, onVerPriv
         else -> null
     }
     val errTelefono = when {
+        !pideTelefono -> null
         intentado && !Validaciones.telefonoValido(telefono) -> "El teléfono debe tener 10 dígitos."
         intentado && telefono.isNotBlank() && telefonoDuplicado == telefono.trim() -> "Ese teléfono ya está registrado en otra cuenta."
         else -> null
@@ -121,10 +124,18 @@ fun RegisterScreen(onVolver: () -> Unit, onRegistrado: (Long) -> Unit, onVerPriv
 
             CampoEnZona(nombre, { nombre = it }, "Nombre completo", error = errNombre)
             Spacer(Modifier.height(12.dp))
-            CampoEnZona(correo, { correo = it }, "Correo electrónico", error = errCorreo, teclado = KeyboardType.Email)
+            CampoEnZona(
+                correo, { correo = it }, "Correo electrónico",
+                error = errCorreo,
+                // Con datos de prueba no se envía correo: el código se muestra en la siguiente pantalla
+                ayuda = if (errCorreo == null && !Repositorio.esDemostracion) "Te enviaremos un código de verificación a este correo." else null,
+                teclado = KeyboardType.Email,
+            )
             Spacer(Modifier.height(12.dp))
-            CampoEnZona(telefono, { telefono = it }, "Teléfono (opcional)", error = errTelefono, teclado = KeyboardType.Phone)
-            Spacer(Modifier.height(12.dp))
+            if (pideTelefono) {
+                CampoEnZona(telefono, { telefono = it }, "Teléfono (opcional)", error = errTelefono, teclado = KeyboardType.Phone)
+                Spacer(Modifier.height(12.dp))
+            }
             CampoEnZona(
                 curp, { curp = it }, "CURP",
                 error = errCurp,
@@ -163,7 +174,7 @@ fun RegisterScreen(onVolver: () -> Unit, onRegistrado: (Long) -> Unit, onVerPriv
                     intentado = true
                     val ok = nombre.isNotBlank() &&
                         Validaciones.correoValido(correo) &&
-                        Validaciones.telefonoValido(telefono) &&
+                        (!pideTelefono || Validaciones.telefonoValido(telefono)) &&
                         Validaciones.curpValido(curp) &&
                         Validaciones.contrasenaValida(contrasena) && contrasena == confirmar &&
                         aceptaAviso
@@ -183,7 +194,7 @@ fun RegisterScreen(onVolver: () -> Unit, onRegistrado: (Long) -> Unit, onVerPriv
                             },
                         ) {
                             Repositorio.actual.registrar(
-                                nombre.trim(), correo.trim(), telefono.trim(), curp.trim(), contrasena,
+                                nombre.trim(), correo.trim(), if (pideTelefono) telefono.trim() else "", curp.trim(), contrasena,
                                 aceptaAvisoPrivacidad = aceptaAviso,
                             )
                         }

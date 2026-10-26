@@ -120,15 +120,23 @@ fun EditProfileScreen(onVolver: () -> Unit) {
     var telefono by remember(usuario.id) { mutableStateOf(usuario.telefono) }
     var guardado by remember { mutableStateOf(false) }
     val operacion = rememberOperacion()
+    // Sin proveedor de SMS no se edita el teléfono: la API pediría un código que nunca llegaría.
+    // Se conserva el teléfono actual y se manda sin cambios al guardar.
+    val editaTelefono = Repositorio.actual.capacidades.verificacionPorTelefono
 
     PantallaAjuste("Editar mis datos", onVolver) {
-        CampoEnZona(nombre, { nombre = it; guardado = false; operacion.error = null }, "Nombre completo")
-        Spacer(Modifier.height(12.dp))
         CampoEnZona(
-            telefono, { telefono = it.filter { c -> c.isDigit() }.take(10); guardado = false; operacion.error = null },
-            "Teléfono", teclado = KeyboardType.Phone, error = operacion.error,
-            ayuda = "10 dígitos, sin espacios",
+            nombre, { nombre = it; guardado = false; operacion.error = null }, "Nombre completo",
+            error = if (editaTelefono) null else operacion.error,
         )
+        if (editaTelefono) {
+            Spacer(Modifier.height(12.dp))
+            CampoEnZona(
+                telefono, { telefono = it.filter { c -> c.isDigit() }.take(10); guardado = false; operacion.error = null },
+                "Teléfono", teclado = KeyboardType.Phone, error = operacion.error,
+                ayuda = "10 dígitos, sin espacios",
+            )
+        }
         Spacer(Modifier.height(16.dp))
 
         Tarjeta {
@@ -154,7 +162,7 @@ fun EditProfileScreen(onVolver: () -> Unit) {
                         SessionManager.actualizar(cuenta)
                         guardado = true
                     },
-                ) { Repositorio.actual.actualizarPerfil(nombre.trim(), telefono.trim()) }
+                ) { Repositorio.actual.actualizarPerfil(nombre.trim(), if (editaTelefono) telefono.trim() else usuario.telefono) }
             }
         )
     }
@@ -173,6 +181,8 @@ fun SecurityScreen(onVolver: () -> Unit) {
     var confirmar by remember { mutableStateOf("") }
     var mensaje by remember { mutableStateOf<String?>(null) }
     var esError by remember { mutableStateOf(false) }
+    // Sin proveedor de SMS no hay forma de registrar un teléfono: la fila «Sin registrar» solo confundiría
+    val muestraTelefono = Repositorio.actual.capacidades.verificacionPorTelefono || usuario.telefono.isNotBlank()
 
     PantallaAjuste("Seguridad", onVolver) {
         Text("Estado de la cuenta", style = MaterialTheme.typography.titleMedium, color = TextoPrincipal)
@@ -192,16 +202,18 @@ fun SecurityScreen(onVolver: () -> Unit) {
                     )
                 }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Filled.Phone, contentDescription = null, tint = TextoSecundario,
-                    modifier = Modifier.size(20.dp))
-                Column(Modifier.padding(start = 12.dp)) {
-                    Text("Teléfono", color = TextoPrincipal, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        if (usuario.telefono.isBlank()) "Sin registrar" else usuario.telefono,
-                        color = TextoSecundario, style = MaterialTheme.typography.labelMedium
-                    )
+            if (muestraTelefono) {
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Phone, contentDescription = null, tint = TextoSecundario,
+                        modifier = Modifier.size(20.dp))
+                    Column(Modifier.padding(start = 12.dp)) {
+                        Text("Teléfono", color = TextoPrincipal, style = MaterialTheme.typography.bodyMedium)
+                        Text(
+                            if (usuario.telefono.isBlank()) "Sin registrar" else usuario.telefono,
+                            color = TextoSecundario, style = MaterialTheme.typography.labelMedium
+                        )
+                    }
                 }
             }
             Spacer(Modifier.height(12.dp))
@@ -277,7 +289,8 @@ fun HelpScreen(onVolver: () -> Unit) {
         Apartado(
             "No me llegó el boleto por correo",
             "Tu boleto siempre está disponible en la pestaña «Mis boletos», aunque el correo no haya llegado. " +
-                "Desde ahí puedes volver a enviártelo. Revisa también la carpeta de correo no deseado."
+                "Desde ahí puedes volver a enviártelo con tu propia app de correo. El correo llega de EnZona con el " +
+                "asunto “Tus boletos para …” y puede tardar unos minutos; si no lo ves, revisa la carpeta de no deseados."
         )
         Apartado(
             "¿Puedo entrar con una captura de pantalla del QR?",

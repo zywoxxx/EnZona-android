@@ -95,6 +95,9 @@ class RepositorioRemoto(
         cargosOrganizador = false,      // la API reembolsa el 100 % y no cobra comisión
         rolesPorAdministrador = false,  // los roles se obtienen al registrarse, activarse o ser designado
         marcarRealizado = false,        // una tarea del servidor marca los eventos terminados
+        // Resend solo manda correo: un teléfono registrado exigiría un código por SMS que nunca
+        // llega y la cuenta quedaría PENDIENTE para siempre, así que la app no pide teléfono
+        verificacionPorTelefono = false,
     )
 
     private val gson = Gson()
@@ -241,7 +244,7 @@ class RepositorioRemoto(
         guardarVerificacion(VerificacionPendiente(0L, correo, listOf(CanalVerificacion.CORREO.name, CanalVerificacion.TELEFONO.name)))
         return ErrorEnZona(
             e.estado, "CUENTA_NO_VERIFICADA",
-            "Tu cuenta aún no está verificada. Escribe el código que enviamos a tu correo.",
+            "Tu cuenta aún no está verificada. Escribe el código que te enviamos por correo; si ya pasó un rato, pide uno nuevo en la siguiente pantalla.",
             mapOf("usuarioId" to 0L),
         )
     }
@@ -278,7 +281,7 @@ class RepositorioRemoto(
         }
         val canales = r.verificacionesPendientes.orEmpty().ifEmpty { listOf(CanalVerificacion.CORREO.name) }
         guardarVerificacion(VerificacionPendiente(r.usuarioId, r.correo ?: correoLimpio, canales))
-        // La API nunca devuelve el código: en desarrollo sale en la consola del servidor (NOTIFICATIONS_MODE=log)
+        // La API nunca devuelve el código: lo envía por correo (Resend); con NOTIFICATIONS_MODE=log sale en la consola del servidor
         return RegistroPendiente(r.usuarioId, otpSimulado = null, correo = correoLimpio, canalesPendientes = canales.mapNotNull(::canal))
     }
 
@@ -316,8 +319,11 @@ class RepositorioRemoto(
 
     override suspend fun usuarioActual(): Usuario = recordar(llamar { yo() }.aDominio())
 
-    override suspend fun actualizarPerfil(nombre: String, telefono: String): Usuario =
-        recordar(llamar { actualizarPerfil(PerfilDto(nombre.trim(), telefono.filter { it.isDigit() }.ifBlank { null })) }.aDominio())
+    /** La API acepta `^\+?[0-9]{10,15}$`: se conserva un «+» inicial y se quitan espacios, guiones y paréntesis. */
+    override suspend fun actualizarPerfil(nombre: String, telefono: String): Usuario {
+        val limpio = telefono.trim().filterIndexed { indice, c -> c.isDigit() || (indice == 0 && c == '+') }
+        return recordar(llamar { actualizarPerfil(PerfilDto(nombre.trim(), limpio.takeIf { it.any(Char::isDigit) })) }.aDominio())
+    }
 
     override suspend fun cambiarContrasena(actual: String, nueva: String) {
         llamar { cambiarContrasena(CambiarContrasenaDto(actual, nueva)) }

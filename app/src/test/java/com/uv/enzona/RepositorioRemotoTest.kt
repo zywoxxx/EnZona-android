@@ -283,6 +283,12 @@ class RepositorioRemotoTest {
         assertFalse(cuerpoDe(servidor.takeRequest()).has("telefono"))
     }
 
+    @Test
+    fun cpRemoto05b_capacidades_noOfreceVerificacionPorTelefono() {
+        // Resend solo envía correo: la app no pide teléfono para no dejar la cuenta PENDIENTE de un SMS
+        assertFalse("sin proveedor de SMS la app no pide teléfono", repositorio.capacidades.verificacionPorTelefono)
+    }
+
     // ------------------------------------------------------------ eventos
 
     @Test
