@@ -1,6 +1,7 @@
 package com.uv.enzona.ui.components
 
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -13,6 +14,7 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -141,15 +143,27 @@ fun PantallaCargando(texto: String = "Cargando…", modifier: Modifier = Modifie
 }
 
 @Composable
-fun PantallaError(mensaje: String, sinConexion: Boolean, onReintentar: () -> Unit, modifier: Modifier = Modifier) {
+fun PantallaError(
+    mensaje: String,
+    sinConexion: Boolean,
+    onReintentar: () -> Unit,
+    modifier: Modifier = Modifier,
+    onCambiarServidor: (() -> Unit)? = null,
+) {
     Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        EstadoVacio(
-            icono = if (sinConexion) Icons.Filled.CloudOff else Icons.Filled.ErrorOutline,
-            titulo = if (sinConexion) "Sin conexión con el servidor" else "No se pudo cargar",
-            texto = mensaje,
-            textoAccion = "Reintentar",
-            onAccion = onReintentar,
-        )
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            EstadoVacio(
+                icono = if (sinConexion) Icons.Filled.CloudOff else Icons.Filled.ErrorOutline,
+                titulo = if (sinConexion) "Sin conexión con el servidor" else "No se pudo cargar",
+                texto = mensaje,
+                textoAccion = "Reintentar",
+                onAccion = onReintentar,
+            )
+            // Al arrancar: la IP del servidor cambia con la red y se puede corregir sin recompilar
+            if (onCambiarServidor != null) {
+                TextButton(onClick = onCambiarServidor) { Text("Cambiar servidor") }
+            }
+        }
     }
 }
 

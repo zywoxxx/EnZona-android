@@ -40,6 +40,7 @@ import com.uv.enzona.data.Repositorio
 import com.uv.enzona.data.SessionManager
 import com.uv.enzona.ui.components.Carga
 import com.uv.enzona.ui.components.EtiquetaDatosDePrueba
+import com.uv.enzona.ui.components.DialogoServidor
 import com.uv.enzona.ui.components.PantallaConectando
 import com.uv.enzona.ui.components.TiemposConexion
 import kotlinx.coroutines.delay
@@ -153,7 +154,9 @@ fun AppEnZona() {
     // Al abrir la app se recupera la sesión guardada (token cifrado) con GET /api/usuarios/me
     var arranque by remember { mutableStateOf<Carga<Unit>>(Carga.Cargando) }
     var intento by remember { mutableStateOf(0) }
-    LaunchedEffect(intento) {
+    var mostrarServidor by remember { mutableStateOf(false) }
+    // Cambiar de servidor (Repositorio.generacion) vuelve a conectar desde cero
+    LaunchedEffect(intento, Repositorio.generacion) {
         arranque = Carga.Cargando
         val inicio = System.currentTimeMillis()
         val resultado = try {
@@ -175,7 +178,15 @@ fun AppEnZona() {
             return
         }
         is Carga.Fallo -> {
-            Scaffold { relleno -> PantallaError(a.mensaje, a.sinConexion, onReintentar = { intento++ }, modifier = Modifier.padding(relleno)) }
+            Scaffold { relleno ->
+                PantallaError(
+                    a.mensaje, a.sinConexion,
+                    onReintentar = { intento++ },
+                    modifier = Modifier.padding(relleno),
+                    onCambiarServidor = { mostrarServidor = true },
+                )
+            }
+            if (mostrarServidor) DialogoServidor(onCerrar = { mostrarServidor = false })
             return
         }
         is Carga.Lista -> Unit

@@ -333,6 +333,14 @@ enzona.api.url=http://10.0.2.2:8080/
 Después de cambiarla hay que recompilar. El tráfico HTTP en claro solo se permite
 en la compilación `debug`; `release` exige HTTPS.
 
+**Sin recompilar:** la IP de la PC cambia con cada red, así que la app permite
+corregir la dirección desde el teléfono. En la pantalla de acceso, el enlace
+«Servidor: …» abre un diálogo donde basta escribir la IP (`10.20.252.100` se
+convierte en `http://10.20.252.100:8080/`); el mismo diálogo aparece en el aviso
+«Sin conexión con el servidor» al arrancar. La dirección se guarda en el
+teléfono, se aplica al instante (la sesión se cierra porque el token no sirve
+en otro servidor) y «Usar la compilada» vuelve a la de `local.properties`.
+
 La API firma los boletos, calcula precios y totales, descuenta el inventario de
 forma atómica (RNF-05) y decide si un boleto da acceso. La app propone y el
 servidor dispone. Lo que la API todavía no implementa se declara en

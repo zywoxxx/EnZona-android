@@ -23,17 +23,59 @@ object Repositorio {
     @Volatile
     private var instancia: RepositorioEnZona? = null
 
+    private var contexto: Context? = null
+    private var almacen: AlmacenCifrado? = null
+
     /** Se llama una vez al crear la actividad. Las pruebas pueden fijar otra implementación con [usar]. */
     fun iniciar(contexto: Context) {
         if (instancia != null) return
-        val url = BuildConfig.ENZONA_API_URL
-        urlBase = url.trim().trimEnd('/')
-        instancia = if (url.isBlank()) RepositorioMock else RepositorioRemoto(url, AlmacenCifrado(contexto))
+        this.contexto = contexto.applicationContext
+        conectar(urlGuardada(contexto) ?: urlPorDefecto)
     }
+
+    private fun conectar(url: String) {
+        urlBase = url.trim().trimEnd('/')
+        instancia = if (url.isBlank()) RepositorioMock else RepositorioRemoto(url, almacenCifrado())
+    }
+
+    private fun almacenCifrado(): AlmacenCifrado =
+        almacen ?: AlmacenCifrado(checkNotNull(contexto) { "Repositorio.iniciar no se llamó" }).also { almacen = it }
 
     /** Dirección de la API (sin barra final); vacía con datos de prueba. */
     var urlBase: String = ""
         private set
+
+    /** Dirección compilada desde `local.properties`; vacía significa datos de prueba. */
+    val urlPorDefecto: String get() = BuildConfig.ENZONA_API_URL.trim()
+
+    /**
+     * Se incrementa al cambiar de servidor: la pantalla de arranque vuelve a conectar
+     * y a restaurar la sesión contra la dirección nueva.
+     */
+    var generacion by mutableIntStateOf(0)
+        private set
+
+    /**
+     * Cambia el servidor sin recompilar (la IP de la PC cambia con cada red). La
+     * dirección se guarda en el teléfono; `null` vuelve a la compilada. La sesión
+     * actual se cierra porque el token no sirve en otro servidor.
+     */
+    fun cambiarServidor(url: String?) {
+        val ctx = contexto ?: return
+        ctx.getSharedPreferences(ARCHIVO_CONFIG, Context.MODE_PRIVATE).edit().apply {
+            if (url == null) remove(CLAVE_URL) else putString(CLAVE_URL, url)
+        }.apply()
+        SessionManager.cerrarSesion()
+        conectar(url ?: urlPorDefecto)
+        generacion++
+    }
+
+    /** Dirección guardada desde la app, si la hay. */
+    fun urlGuardada(contexto: Context): String? =
+        contexto.getSharedPreferences(ARCHIVO_CONFIG, Context.MODE_PRIVATE).getString(CLAVE_URL, null)
+
+    private const val ARCHIVO_CONFIG = "enzona_config"
+    private const val CLAVE_URL = "url_api"
 
     /** Las portadas del almacén local de la API llegan relativas (`/api/imagenes/…`); aquí se completan. */
     fun urlAbsoluta(url: String?): String? = when {

@@ -36,6 +36,7 @@ import com.uv.enzona.data.SessionManager
 import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.ui.components.BotonEnZona
 import com.uv.enzona.ui.components.CampoEnZona
+import com.uv.enzona.ui.components.DialogoServidor
 import com.uv.enzona.ui.theme.MoradoFondo
 import com.uv.enzona.ui.theme.MoradoSuperficie
 import com.uv.enzona.ui.theme.NaranjaAcento
@@ -204,6 +205,17 @@ fun LoginScreen(
             }
         }
 
-        Spacer(Modifier.height(40.dp))
+        // A qué servidor habla la app; se puede cambiar sin recompilar cuando cambia la red
+        var mostrarServidor by remember { mutableStateOf(false) }
+        TextButton(onClick = { mostrarServidor = true }) {
+            Text(
+                if (Repositorio.esDemostracion) "Servidor: datos de prueba" else "Servidor: ${Repositorio.urlBase}",
+                color = TextoSecundario,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+        if (mostrarServidor) DialogoServidor(onCerrar = { mostrarServidor = false })
+
+        Spacer(Modifier.height(30.dp))
     }
 }
