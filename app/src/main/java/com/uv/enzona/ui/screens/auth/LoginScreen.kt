@@ -37,6 +37,7 @@ import com.uv.enzona.ui.components.rememberOperacion
 import com.uv.enzona.ui.components.BotonEnZona
 import com.uv.enzona.ui.components.CampoEnZona
 import com.uv.enzona.ui.components.DialogoServidor
+import com.uv.enzona.ui.components.gestoOculto
 import com.uv.enzona.ui.theme.MoradoFondo
 import com.uv.enzona.ui.theme.MoradoSuperficie
 import com.uv.enzona.ui.theme.NaranjaAcento
@@ -76,14 +77,17 @@ fun LoginScreen(
     ) {
         Spacer(Modifier.height(60.dp))
 
-        // Marca
+        // Marca. Siete toques seguidos abren la opción oculta de desarrollo «Servidor».
+        var mostrarServidor by remember { mutableStateOf(false) }
         androidx.compose.foundation.Image(
             painter = androidx.compose.ui.res.painterResource(com.uv.enzona.R.drawable.enzona_logo),
             contentDescription = "EnZona",
             modifier = Modifier
                 .fillMaxWidth(0.72f)
-                .height(76.dp),
+                .height(76.dp)
+                .gestoOculto { mostrarServidor = true },
         )
+        if (mostrarServidor) DialogoServidor(onCerrar = { mostrarServidor = false })
 
         Spacer(Modifier.height(18.dp))
         if (modoPersonal) {
@@ -205,17 +209,6 @@ fun LoginScreen(
             }
         }
 
-        // A qué servidor habla la app; se puede cambiar sin recompilar cuando cambia la red
-        var mostrarServidor by remember { mutableStateOf(false) }
-        TextButton(onClick = { mostrarServidor = true }) {
-            Text(
-                if (Repositorio.esDemostracion) "Servidor: datos de prueba" else "Servidor: ${Repositorio.urlBase}",
-                color = TextoSecundario,
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        if (mostrarServidor) DialogoServidor(onCerrar = { mostrarServidor = false })
-
-        Spacer(Modifier.height(30.dp))
+        Spacer(Modifier.height(40.dp))
     }
 }

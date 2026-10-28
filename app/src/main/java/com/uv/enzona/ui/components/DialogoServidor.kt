@@ -24,9 +24,10 @@ import com.uv.enzona.data.normalizarUrlServidor
 import com.uv.enzona.ui.theme.TextoSecundario
 
 /**
- * Cambia la dirección del API sin recompilar: la IP de la PC donde corre el
- * servidor cambia con cada red. Se abre desde la pantalla de acceso y desde el
- * aviso de «Sin conexión con el servidor».
+ * Opción oculta de desarrollo: fija la dirección del API a mano cuando la
+ * detección automática no basta (p. ej. otra PC en la red). Se abre con siete
+ * toques en el logo de la pantalla de acceso o en el aviso de «Sin conexión».
+ * Quien usa la app nunca la ve.
  */
 @Composable
 fun DialogoServidor(onCerrar: () -> Unit) {
@@ -36,11 +37,11 @@ fun DialogoServidor(onCerrar: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = onCerrar,
-        title = { Text("Servidor de EnZona") },
+        title = { Text("Servidor (desarrollo)") },
         text = {
             Column {
                 Text(
-                    "Dirección del API. Si cambió la red, escribe la IP de la PC donde corre el servidor; " +
+                    "La app detecta sola el servidor al arrancar. Fija aquí una dirección solo si hace falta; " +
                         "sin puerto se usa el 8080.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -78,7 +79,7 @@ fun DialogoServidor(onCerrar: () -> Unit) {
         },
         dismissButton = {
             if (hayPorDefecto) {
-                TextButton(onClick = { Repositorio.cambiarServidor(null); onCerrar() }) { Text("Usar la compilada") }
+                TextButton(onClick = { Repositorio.cambiarServidor(null); onCerrar() }) { Text("Automático") }
             } else {
                 TextButton(onClick = onCerrar) { Text("Cancelar") }
             }

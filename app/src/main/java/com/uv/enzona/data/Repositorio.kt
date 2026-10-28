@@ -56,9 +56,10 @@ object Repositorio {
         private set
 
     /**
-     * Cambia el servidor sin recompilar (la IP de la PC cambia con cada red). La
-     * dirección se guarda en el teléfono; `null` vuelve a la compilada. La sesión
-     * actual se cierra porque el token no sirve en otro servidor.
+     * Opción oculta de desarrollo: fija el servidor a mano (la IP de la PC cambia
+     * con cada red). La dirección se guarda en el teléfono y anula la detección
+     * automática; `null` la borra y vuelve a detectar. La sesión actual se cierra
+     * porque el token no sirve en otro servidor.
      */
     fun cambiarServidor(url: String?) {
         val ctx = contexto ?: return
@@ -70,9 +71,27 @@ object Repositorio {
         generacion++
     }
 
-    /** Dirección guardada desde la app, si la hay. */
+    /** Dirección fijada a mano desde el diálogo oculto, si la hay. */
     fun urlGuardada(contexto: Context): String? =
         contexto.getSharedPreferences(ARCHIVO_CONFIG, Context.MODE_PRIVATE).getString(CLAVE_URL, null)
+
+    /** Sonda de red; las pruebas la sustituyen. */
+    var sonda: suspend (String) -> Boolean = sondaHttp()
+
+    /**
+     * Detección automática al arrancar: la persona no configura nada. Se prueban a
+     * la vez la dirección compilada, la PC por cable USB y el emulador, y se usa la
+     * primera que responde. Si ninguna responde se queda la compilada (la pantalla
+     * de arranque mostrará «Sin conexión»). No aplica con datos de prueba ni cuando
+     * se fijó una dirección a mano.
+     */
+    suspend fun elegirServidorDisponible() {
+        val ctx = contexto ?: return
+        if (urlPorDefecto.isBlank() || urlGuardada(ctx) != null) return
+        val candidatos = listOf(urlPorDefecto, URL_USB, URL_EMULADOR).distinct()
+        val disponible = primeroQueResponde(candidatos, sonda) ?: return
+        if (disponible.trimEnd('/') != urlBase) conectar(disponible)
+    }
 
     private const val ARCHIVO_CONFIG = "enzona_config"
     private const val CLAVE_URL = "url_api"

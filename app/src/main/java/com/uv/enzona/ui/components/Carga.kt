@@ -1,7 +1,6 @@
 package com.uv.enzona.ui.components
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -14,7 +13,6 @@ import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
@@ -150,20 +148,16 @@ fun PantallaError(
     modifier: Modifier = Modifier,
     onCambiarServidor: (() -> Unit)? = null,
 ) {
-    Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            EstadoVacio(
-                icono = if (sinConexion) Icons.Filled.CloudOff else Icons.Filled.ErrorOutline,
-                titulo = if (sinConexion) "Sin conexión con el servidor" else "No se pudo cargar",
-                texto = mensaje,
-                textoAccion = "Reintentar",
-                onAccion = onReintentar,
-            )
-            // Al arrancar: la IP del servidor cambia con la red y se puede corregir sin recompilar
-            if (onCambiarServidor != null) {
-                TextButton(onClick = onCambiarServidor) { Text("Cambiar servidor") }
-            }
-        }
+    // Al arrancar, siete toques en el aviso abren la opción oculta de desarrollo «Servidor»
+    val gesto = if (onCambiarServidor != null) Modifier.gestoOculto(onCambiarServidor) else Modifier
+    Box(modifier.fillMaxSize().then(gesto), contentAlignment = Alignment.Center) {
+        EstadoVacio(
+            icono = if (sinConexion) Icons.Filled.CloudOff else Icons.Filled.ErrorOutline,
+            titulo = if (sinConexion) "Sin conexión con el servidor" else "No se pudo cargar",
+            texto = mensaje,
+            textoAccion = "Reintentar",
+            onAccion = onReintentar,
+        )
     }
 }
 

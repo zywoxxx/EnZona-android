@@ -160,6 +160,8 @@ fun AppEnZona() {
         arranque = Carga.Cargando
         val inicio = System.currentTimeMillis()
         val resultado = try {
+            // Sin configuración: se usa la dirección del API que responda (compilada, USB o emulador)
+            Repositorio.elegirServidorDisponible()
             val repositorio = Repositorio.actual
             repositorio.restaurarSesion()?.let { usuario ->
                 SessionManager.iniciarSesion(usuario, comoPersonal = repositorio.sesionDePersonal() && usuario.esPersonal)
