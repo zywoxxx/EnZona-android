@@ -38,9 +38,11 @@ diagrama de casos de uso —**asistente**, **organizador**, **validador** y
   en Mis eventos, el panel de cada evento y el formulario de nuevo evento,
   la app oscurece la pantalla, ilumina el control que explica y le apunta con
   una flecha dibujada a mano junto a un texto corto en blanco; se avanza tocando
-  la pantalla (Omitir / Atrás / Siguiente abajo). Se recuerda por teléfono
-  (`data/Guias.kt`, preferencias locales) y se puede repetir desde Perfil →
-  «Volver a ver las guías». Componente reutilizable `ui/components/GuiaInteractiva.kt`:
+  la pantalla (Omitir / Atrás / Siguiente abajo). Se recuerda **por cuenta** en
+  cada teléfono (`data/Guias.kt`, preferencias locales con clave `usuarioId:guía`):
+  una persona que se registra ve las guías aunque otra ya las haya visto en el
+  mismo aparato. Se pueden repetir desde Perfil → «Volver a ver las guías», y
+  en Ayuda cada pregunta frecuente se despliega al tocarla. Componente reutilizable `ui/components/GuiaInteractiva.kt`:
   `AnfitrionDeGuias` envuelve la app, `Modifier.objetivoDeGuia("clave")` marca
   el objetivo y `GuiaDePantalla(clave, pasos)` declara el recorrido; el foco se
   trae a la vista si está fuera de pantalla.

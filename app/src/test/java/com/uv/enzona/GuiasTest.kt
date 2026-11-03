@@ -6,6 +6,8 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.unit.IntOffset
 import com.uv.enzona.data.Guias
+import com.uv.enzona.data.SessionManager
+import com.uv.enzona.data.model.Usuario
 import com.uv.enzona.ui.components.EstadoGuias
 import com.uv.enzona.ui.components.PasoGuia
 import com.uv.enzona.ui.components.posicionTarjeta
@@ -23,7 +25,40 @@ class GuiasTest {
     private val pasos = listOf(PasoGuia("a", "Paso 1", "…"), PasoGuia("b", "Paso 2", "…"))
 
     @After
-    fun limpiar() = Guias.usar(null)
+    fun limpiar() {
+        Guias.usar(null)
+        SessionManager.cerrarSesion()
+    }
+
+    private fun cuenta(id: Long) = Usuario(id = id, nombre = "U$id", correo = "u$id@uv.mx", curp = "CURP", contrasenaHash = "")
+
+    @Test
+    fun cadaCuentaVeLasGuiasLaPrimeraVezAunqueOtraYaLasHayaVistoEnElMismoTelefono() {
+        Guias.usar(PreferenciasEnMemoria())
+        SessionManager.iniciarSesion(cuenta(1))
+        val estado = EstadoGuias()
+        assertTrue(estado.pedir("inicio", pasos))
+        estado.terminar("inicio")
+        assertTrue(Guias.vista("inicio"))
+
+        SessionManager.iniciarSesion(cuenta(2))          // otra persona entra en el mismo teléfono
+        assertFalse(Guias.vista("inicio"))
+        assertTrue(EstadoGuias().pedir("inicio", pasos))
+
+        SessionManager.iniciarSesion(cuenta(1))          // la primera sigue sin verla de nuevo
+        assertTrue(Guias.vista("inicio"))
+    }
+
+    @Test
+    fun volverAVerLasGuiasSoloReiniciaLasDeLaCuentaConSesion() {
+        Guias.usar(PreferenciasEnMemoria())
+        SessionManager.iniciarSesion(cuenta(1)); Guias.marcarVista("inicio")
+        SessionManager.iniciarSesion(cuenta(2)); Guias.marcarVista("inicio")
+        Guias.reiniciar()
+        assertFalse(Guias.vista("inicio"))
+        SessionManager.iniciarSesion(cuenta(1))
+        assertTrue(Guias.vista("inicio"))
+    }
 
     @Test
     fun sinPreferenciasNingunaGuiaSeAbre() {

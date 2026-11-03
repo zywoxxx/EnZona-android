@@ -1,6 +1,8 @@
 package com.uv.enzona.ui.screens.ajustes
 
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -15,6 +17,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -29,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -106,6 +111,38 @@ private fun Apartado(titulo: String, cuerpo: String) {
             style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(6.dp))
         Text(cuerpo, color = TextoSecundario, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/** Pregunta que se abre al tocarla: la lista de ayuda se lee de un vistazo y cada respuesta se despliega. */
+@Composable
+private fun ApartadoDesplegable(titulo: String, cuerpo: String, abiertoAlInicio: Boolean = false) {
+    var abierto by rememberSaveable { mutableStateOf(abiertoAlInicio) }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .background(MoradoSuperficie)
+            .clickable { abierto = !abierto }
+            .animateContentSize()
+            .padding(16.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                titulo, color = TextoPrincipal, fontWeight = FontWeight.SemiBold,
+                style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f),
+            )
+            Icon(
+                if (abierto) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = if (abierto) "Ocultar respuesta" else "Ver respuesta",
+                tint = NaranjaAcento,
+            )
+        }
+        if (abierto) {
+            Spacer(Modifier.height(8.dp))
+            Text(cuerpo, color = TextoSecundario, style = MaterialTheme.typography.bodyMedium)
+        }
     }
 }
 
@@ -284,36 +321,43 @@ fun SecurityScreen(onVolver: () -> Unit) {
 fun HelpScreen(onVolver: () -> Unit) {
     PantallaAjuste("¿Necesitas ayuda?", onVolver) {
         Text("Preguntas frecuentes", style = MaterialTheme.typography.titleMedium, color = TextoPrincipal)
+        Spacer(Modifier.height(4.dp))
+        Text("Toca una pregunta para ver la respuesta", color = TextoSecundario, style = MaterialTheme.typography.bodySmall)
         Spacer(Modifier.height(10.dp))
 
-        Apartado(
+        ApartadoDesplegable(
             "No me llegó el boleto por correo",
             "Tu boleto siempre está disponible en la pestaña «Mis boletos», aunque el correo no haya llegado. " +
                 "Desde ahí puedes volver a enviártelo con tu propia app de correo. El correo llega de EnZona con el " +
                 "asunto “Tus boletos para …” y puede tardar unos minutos; si no lo ves, revisa la carpeta de no deseados."
         )
-        Apartado(
+        ApartadoDesplegable(
             "¿Puedo entrar con una captura de pantalla del QR?",
             "Sí. Lo que se valida es el código, no la pantalla donde se muestra. Eso sí: el boleto es de un " +
                 "solo uso, así que si alguien más lo escanea antes que tú, ya no podrás entrar con él. No " +
                 "compartas tu código."
         )
-        Apartado(
+        ApartadoDesplegable(
             "El evento se canceló, ¿qué pasa con mi dinero?",
             "Cuando un organizador cancela un evento, tus boletos se anulan automáticamente y el reembolso se " +
                 "inicia a través de la misma pasarela por la que pagaste. El tiempo de acreditación depende de " +
                 "tu banco."
         )
-        Apartado(
+        ApartadoDesplegable(
             "Me equivoqué de evento o ya no puedo asistir",
             "Escríbele al organizador del evento: es quien define su política de cambios. EnZona no permite " +
                 "revender ni transferir boletos entre usuarios."
         )
-        Apartado(
+        ApartadoDesplegable(
             "Soy organizador, ¿cómo valido los boletos en la puerta?",
             "Desde tu panel del evento designa como personal de acceso a quien vaya a estar en la entrada. Esa " +
                 "persona verá la pestaña «Escanear» en su cuenta. Descarguen la lista del evento antes de " +
                 "empezar: el escáner funciona aunque no haya señal."
+        )
+        ApartadoDesplegable(
+            "¿Cómo vuelvo a ver las guías de la app?",
+            "Las guías paso a paso aparecen la primera vez que entras a cada pantalla. Si quieres repetirlas, " +
+                "ve a Perfil y toca «Volver a ver las guías»."
         )
 
         Spacer(Modifier.height(8.dp))

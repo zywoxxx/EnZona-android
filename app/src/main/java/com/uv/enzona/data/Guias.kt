@@ -7,11 +7,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 
 /**
- * Qué guías interactivas (recorridos de la primera vez) ya vio esta persona en
- * este teléfono. Hay guías para asistentes y organizadores; el validador y el
- * administrador no las tienen: su pantalla es de trabajo y se explica sola.
- * Se guarda en preferencias locales: no viaja al servidor y se puede reiniciar
- * desde Perfil → «Volver a ver las guías».
+ * Qué guías interactivas (recorridos de la primera vez) ya vio **cada cuenta**
+ * en este teléfono: una persona que se registra ve las guías aunque otra ya las
+ * haya visto en el mismo aparato. Hay guías para asistentes y organizadores; el
+ * validador y el administrador no las tienen: su pantalla es de trabajo y se
+ * explica sola. Se guarda en preferencias locales (clave `usuarioId:guía`): no
+ * viaja al servidor y se puede reiniciar desde Perfil → «Volver a ver las guías».
  *
  * Sin [iniciar] (vistas previas y pruebas) todas las guías cuentan como vistas,
  * para que nunca aparezcan encima de lo que se está probando.
@@ -36,16 +37,23 @@ object Guias {
         cambios++
     }
 
-    fun vista(clave: String): Boolean = preferencias?.getBoolean(clave, false) ?: true
+    /** La guía pertenece a la cuenta con sesión; sin sesión se usa el prefijo -1. */
+    private fun claveDeCuenta(clave: String): String = "${SessionManager.usuarioId}:$clave"
+
+    fun vista(clave: String): Boolean = preferencias?.getBoolean(claveDeCuenta(clave), false) ?: true
 
     fun marcarVista(clave: String) {
-        preferencias?.edit()?.putBoolean(clave, true)?.apply()
+        preferencias?.edit()?.putBoolean(claveDeCuenta(clave), true)?.apply()
         cambios++
     }
 
-    /** Vuelve a mostrar todas las guías la próxima vez que se abra cada pantalla. */
+    /** Vuelve a mostrar a esta cuenta todas las guías la próxima vez que abra cada pantalla. */
     fun reiniciar() {
-        preferencias?.edit()?.clear()?.apply()
+        val prefs = preferencias ?: return
+        val prefijo = "${SessionManager.usuarioId}:"
+        val editor = prefs.edit()
+        prefs.all.keys.filter { it.startsWith(prefijo) }.forEach { editor.remove(it) }
+        editor.apply()
         cambios++
     }
 
