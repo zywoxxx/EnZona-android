@@ -306,6 +306,15 @@ class RepositorioRemoto(
         return null     // el código nunca viaja en la respuesta
     }
 
+    override suspend fun solicitarRecuperacion(correo: String): String? {
+        llamar { solicitarRecuperacion(RecuperacionDto(correo.trim().lowercase())) }
+        return null     // el código viaja por correo, nunca en la respuesta
+    }
+
+    override suspend fun restablecerContrasena(correo: String, codigo: String, nuevaContrasena: String) {
+        llamar { restablecerContrasena(RestablecimientoDto(correo.trim().lowercase(), codigo.trim(), nuevaContrasena)) }
+    }
+
     private fun sinVerificacionPendiente() =
         ErrorEnZona(409, "SIN_VERIFICACION_PENDIENTE", "No hay una verificación pendiente en este dispositivo. Inicia sesión con tu correo para continuar.")
 

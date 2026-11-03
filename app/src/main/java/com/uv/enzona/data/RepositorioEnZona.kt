@@ -82,6 +82,16 @@ interface RepositorioEnZona {
     /** Devuelve el código solo cuando el envío es una simulación (datos de prueba); con la API siempre es null. */
     suspend fun reenviarOtp(usuarioId: Long): String?
 
+    /**
+     * «¿Olvidaste tu contraseña?»: pide un código de 6 dígitos al correo de la cuenta.
+     * Termina bien aunque el correo no exista (la API no revela qué correos hay).
+     * Devuelve el código solo cuando el envío es una simulación; con la API siempre es null.
+     */
+    suspend fun solicitarRecuperacion(correo: String): String?
+
+    /** Cambia la contraseña con el código recibido por correo; después se inicia sesión con la nueva. */
+    suspend fun restablecerContrasena(correo: String, codigo: String, nuevaContrasena: String)
+
     suspend fun usuarioActual(): Usuario
 
     suspend fun actualizarPerfil(nombre: String, telefono: String): Usuario

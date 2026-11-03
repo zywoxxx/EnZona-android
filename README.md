@@ -225,6 +225,18 @@ gradlew.bat assembleDebug testDebugUnitTest
 2. Espera el *Gradle Sync* (la primera vez descarga CameraX y ML Kit).
 3. Ejecuta con **Run ▶** en un emulador o en tu teléfono.
 
+## ¿Olvidaste tu contraseña?
+
+Desde la pantalla de acceso (asistentes o personal), «¿Olvidaste tu contraseña?»
+pide el correo de la cuenta, la API envía un código de 6 dígitos (asunto
+«Restablece tu contraseña de EnZona») y con ese código se elige una contraseña
+nueva sin iniciar sesión. La API responde igual exista o no el correo, así que
+la app no confirma qué correos están registrados; el reenvío respeta los 60 s
+entre códigos. Con los datos de prueba el código se muestra en pantalla.
+Endpoints: `POST /api/auth/contrasena/recuperacion` y
+`POST /api/auth/contrasena/restablecimiento` (reglas en
+`ui/screens/auth/RecuperacionContrasena.kt`).
+
 ## Cuentas de prueba
 
 Contraseña para todas: **enzona123**

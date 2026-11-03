@@ -95,6 +95,13 @@ object RepositorioMock : RepositorioEnZona {
 
     override suspend fun reenviarOtp(usuarioId: Long): String? = MockRepository.reenviarOtp(usuarioId)
 
+    /** Con datos de prueba el código se muestra en pantalla; si el correo no existe no hay código (como con la API). */
+    override suspend fun solicitarRecuperacion(correo: String): String? = MockRepository.solicitarRecuperacion(correo)
+
+    override suspend fun restablecerContrasena(correo: String, codigo: String, nuevaContrasena: String) = local {
+        MockRepository.restablecerContrasena(correo, codigo, nuevaContrasena).getOrThrow()
+    }
+
     override suspend fun usuarioActual(): Usuario =
         MockRepository.usuarios.find { it.id == yo } ?: throw ErrorEnZona(401, "NO_AUTENTICADO", "Inicia sesión para continuar.")
 

@@ -53,6 +53,14 @@ interface ApiService {
     suspend fun reenviarCodigo(@Body datos: ReenvioDto)
 
     /** `identificador` es el correo o el CURP. 401 CREDENCIALES_INVALIDAS, 403 CUENTA_PENDIENTE/CUENTA_BLOQUEADA, 429 DEMASIADOS_INTENTOS. */
+    /** 202 siempre, exista o no el correo. */
+    @POST("api/auth/contrasena/recuperacion")
+    suspend fun solicitarRecuperacion(@Body datos: RecuperacionDto)
+
+    /** 204. 400 CODIGO_VERIFICACION_INVALIDO/EXPIRADO, 403 CUENTA_BLOQUEADA, 429 DEMASIADOS_INTENTOS. */
+    @POST("api/auth/contrasena/restablecimiento")
+    suspend fun restablecerContrasena(@Body datos: RestablecimientoDto)
+
     @POST("api/auth/sesion")
     suspend fun iniciarSesion(@Body datos: SesionDto): SesionRespuestaDto
 
@@ -242,6 +250,10 @@ data class VerificacionRespuestaDto(val estado: String?, val correoVerificado: B
 data class ReenvioDto(val correo: String, val canal: String)
 
 data class SesionDto(val identificador: String, val contrasena: String)
+
+data class RecuperacionDto(val correo: String)
+
+data class RestablecimientoDto(val correo: String, val codigo: String, val nuevaContrasena: String)
 
 data class SesionRespuestaDto(val token: String, val tipo: String?, val expiraEnSegundos: Long?, val expiraEn: String?, val usuario: UsuarioDto)
 

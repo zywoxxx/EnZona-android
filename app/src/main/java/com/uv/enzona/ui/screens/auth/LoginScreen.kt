@@ -59,6 +59,7 @@ fun LoginScreen(
     onIrARegistro: () -> Unit,
     onCambiarModo: () -> Unit,
     onVerificarCuenta: (Long) -> Unit = {},
+    onOlvideContrasena: () -> Unit = {},
 ) {
     var identificador by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
@@ -174,6 +175,9 @@ fun LoginScreen(
 
         Spacer(Modifier.height(6.dp))
 
+        TextButton(onClick = onOlvideContrasena, enabled = !operacion.enCurso) {
+            Text("¿Olvidaste tu contraseña?", color = com.uv.enzona.ui.theme.AzulProfundo)
+        }
         if (!modoPersonal) {
             TextButton(onClick = onIrARegistro) {
                 Text("¿No tienes cuenta? Regístrate", color = com.uv.enzona.ui.theme.AzulProfundo)

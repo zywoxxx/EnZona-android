@@ -99,6 +99,9 @@ object MockRepository {
     /** OTP pendiente por usuario (en producción se envía por correo/SMS). */
     private val otpPendientes = mutableMapOf<Long, String>()
 
+    /** Códigos de «¿Olvidaste tu contraseña?» por correo (en producción se envían por correo). */
+    private val recuperaciones = mutableMapOf<String, String>()
+
     // ---- Preferencias de zona: viven en `Preferencias` (son del teléfono, no del repositorio) ----
     val ciudad get() = Preferencias.ciudad
     val pais get() = Preferencias.pais
@@ -904,6 +907,30 @@ object MockRepository {
     // ==================================================================
     //  Seguridad de la cuenta
     // ==================================================================
+
+    /** Emite un código de recuperación; null si el correo no tiene cuenta (no se envía nada, como en la API). */
+    fun solicitarRecuperacion(correo: String): String? {
+        val clave = correo.trim().lowercase()
+        if (usuarios.none { it.correo.equals(clave, true) }) return null
+        val codigo = "%06d".format(Random.nextInt(0, 1_000_000))
+        recuperaciones[clave] = codigo
+        return codigo
+    }
+
+    /** Cambia la contraseña si el código es el último emitido para ese correo; el código se consume. */
+    fun restablecerContrasena(correo: String, codigo: String, nueva: String): Result<Unit> {
+        val clave = correo.trim().lowercase()
+        val i = usuarios.indexOfFirst { it.correo.equals(clave, true) }
+        if (i < 0 || recuperaciones[clave] != codigo.trim()) {
+            return Result.failure(IllegalArgumentException("El código no es válido. Revísalo o pide uno nuevo."))
+        }
+        if (!com.uv.enzona.util.Validaciones.contrasenaValida(nueva)) {
+            return Result.failure(IllegalArgumentException("La nueva contraseña debe tener al menos 8 caracteres, con letras y números."))
+        }
+        usuarios[i] = usuarios[i].copy(contrasenaHash = hashContrasena(nueva))
+        recuperaciones.remove(clave)
+        return Result.success(Unit)
+    }
 
     fun cambiarContrasena(usuarioId: Long, actual: String, nueva: String): Result<Unit> {
         val i = usuarios.indexOfFirst { it.id == usuarioId }

@@ -66,6 +66,7 @@ import com.uv.enzona.ui.screens.TicketsScreen
 import com.uv.enzona.ui.screens.admin.AdminScreen
 import com.uv.enzona.ui.screens.auth.LoginScreen
 import com.uv.enzona.ui.screens.auth.OtpScreen
+import com.uv.enzona.ui.screens.auth.RecuperarContrasenaScreen
 import com.uv.enzona.ui.screens.auth.RegisterScreen
 import com.uv.enzona.ui.screens.organizer.EventFormScreen
 import com.uv.enzona.ui.screens.organizer.EventStatsScreen
@@ -80,6 +81,7 @@ object Rutas {
     const val LOGIN_PERSONAL = "login_personal"
     const val REGISTRO = "registro"
     const val OTP = "otp/{usuarioId}"
+    const val RECUPERAR_CONTRASENA = "recuperar_contrasena"
 
     // Asistente
     const val HOME = "home"
@@ -247,6 +249,7 @@ fun AppEnZona() {
                     onIrARegistro = { navController.navigate(Rutas.REGISTRO) },
                     onCambiarModo = { navController.navigate(Rutas.LOGIN_PERSONAL) },
                     onVerificarCuenta = { usuarioId -> navController.navigate(Rutas.otp(usuarioId)) },
+                    onOlvideContrasena = { navController.navigate(Rutas.RECUPERAR_CONTRASENA) },
                 )
             }
             composable(Rutas.LOGIN_PERSONAL) {
@@ -255,6 +258,14 @@ fun AppEnZona() {
                     onAutenticado = { irAInicioDeRol(navController) },
                     onIrARegistro = {},
                     onCambiarModo = { navController.popBackStack() },
+                    onOlvideContrasena = { navController.navigate(Rutas.RECUPERAR_CONTRASENA) },
+                )
+            }
+            composable(Rutas.RECUPERAR_CONTRASENA) {
+                RecuperarContrasenaScreen(
+                    onVolver = { navController.popBackStack() },
+                    // Con la contraseña nueva se vuelve al acceso con el que se empezó (asistentes o personal)
+                    onRestablecida = { navController.popBackStack() },
                 )
             }
             composable(Rutas.REGISTRO) {
