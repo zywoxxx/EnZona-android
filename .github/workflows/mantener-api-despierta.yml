@@ -1,0 +1,19 @@
+# Mantiene despierta la API en el plan gratuito de Render (se apaga tras 15 min sin tráfico).
+# Pide /actuator/health cada 10 minutos; si la API está dormida, la primera petición la despierta.
+name: Mantener la API despierta
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Pedir /actuator/health
+        run: |
+          codigo=$(curl -s -o /dev/null -w "%{http_code}" --max-time 120 https://enzona-api.onrender.com/actuator/health || true)
+          echo "HTTP $codigo"
+          test "$codigo" = "200"

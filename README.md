@@ -328,9 +328,15 @@ enzona.api.url=http://10.0.2.2:8080/
 
 | Valor | Resultado |
 |---|---|
+| `https://enzona-api.onrender.com/` | **API en la nube (Render, rama `develop`).** Sirve desde cualquier red, con datos móviles incluidos; es la que lleva el APK de `apk/` |
 | `http://10.0.2.2:8080/` | Emulador: `10.0.2.2` es la PC donde corre EnZona_Api |
 | `http://<IP de la PC>:8080/` | Teléfono físico en la misma red local (abre el puerto 8080 en el firewall) |
 | vacío | Datos de prueba en memoria, con la etiqueta «Datos de prueba» |
+
+La instancia de Render es del plan gratuito: se apaga tras 15 minutos sin
+tráfico y tarda alrededor de un minuto en despertar (la animación de conexión
+de la app cubre esa espera). El flujo `.github/workflows/mantener-api-despierta.yml`
+le pide `/actuator/health` cada 10 minutos para que no se duerma.
 
 Después de cambiarla hay que recompilar. El tráfico HTTP en claro solo se permite
 en la compilación `debug`; `release` exige HTTPS.
