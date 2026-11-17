@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens.admin
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -107,7 +108,7 @@ private fun PestanaUsuarios() {
 
     ContenidoCarga(carga, textoCargando = "Cargando cuentas…") { usuarios ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().contenidoLegible(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -219,7 +220,7 @@ private fun PestanaEventos() {
 
     ContenidoCarga(carga, textoCargando = "Cargando eventos…") { eventos ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().contenidoLegible(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {

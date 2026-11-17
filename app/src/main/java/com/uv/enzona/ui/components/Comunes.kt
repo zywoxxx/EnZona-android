@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.components
 
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -212,12 +214,15 @@ fun BotonEnZona(
     destacado: Boolean = false,
 ) {
     val colores = MaterialTheme.colorScheme
+    val interaccion = remember { MutableInteractionSource() }
     Button(
         onClick = onClick,
         enabled = habilitado && !cargando,
+        interactionSource = interaccion,
         modifier = modifier
             .fillMaxWidth()
-            .height(Tamanos.botonPrincipal),
+            .height(Tamanos.botonPrincipal)
+            .escalaAlPresionar(interaccion),
         shape = CircleShape,
         colors = ButtonDefaults.buttonColors(
             // Destacado = coral con texto tinta (comprar, confirmar, publicar); normal = azul marino con blanco
@@ -251,12 +256,15 @@ fun BotonSecundario(
     habilitado: Boolean = true,
     icono: ImageVector? = null,
 ) {
+    val interaccion = remember { MutableInteractionSource() }
     OutlinedButton(
         onClick = onClick,
         enabled = habilitado,
+        interactionSource = interaccion,
         modifier = modifier
             .fillMaxWidth()
-            .height(Tamanos.control),
+            .height(Tamanos.control)
+            .escalaAlPresionar(interaccion),
         shape = CircleShape,
         colors = ButtonDefaults.outlinedButtonColors(
             contentColor = MaterialTheme.colorScheme.onSurface,

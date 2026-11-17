@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.screens.auth
 
+import com.uv.enzona.ui.theme.Legible
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -72,6 +74,7 @@ fun LoginScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MoradoFondo)
+            .contenidoLegible(Legible.formulario)
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 26.dp),
         horizontalAlignment = Alignment.CenterHorizontally

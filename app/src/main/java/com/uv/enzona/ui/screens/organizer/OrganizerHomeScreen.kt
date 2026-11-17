@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens.organizer
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -92,7 +93,8 @@ fun OrganizerHomeScreen(onNuevoEvento: () -> Unit, onEventoClick: (Long) -> Unit
         LazyColumn(
             modifier = Modifier
                 .padding(relleno)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .contenidoLegible(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {

@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.screens.auth
 
+import com.uv.enzona.ui.theme.Legible
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -112,6 +114,7 @@ fun RegisterScreen(onVolver: () -> Unit, onRegistrado: (Long) -> Unit, onVerPriv
                 .padding(relleno)
                 .fillMaxSize()
                 .background(MoradoFondo)
+                .contenidoLegible(Legible.formulario)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 22.dp)
         ) {

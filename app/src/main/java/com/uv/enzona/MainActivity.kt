@@ -1,5 +1,12 @@
 package com.uv.enzona
 
+import com.uv.enzona.ui.theme.anchoPantalla
+import com.uv.enzona.ui.components.Movimiento
+import androidx.compose.material3.NavigationRailItemDefaults
+import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRail
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.Row
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -203,6 +210,8 @@ fun AppEnZona() {
 
     val destinos = destinosDeRol()
     val mostrarBarra = SessionManager.autenticado && destinos.any { it.ruta == rutaActual }
+    // Teléfono: pestañas abajo. Tableta o pantalla ancha: barra lateral, que no roba alto a la lista
+    val barraAbajo = !anchoPantalla().esAmplia
 
     // Si la sesión termina (token expirado o cuenta bloqueada) la app vuelve al acceso
     LaunchedEffect(SessionManager.autenticado, rutaActual) {
@@ -214,7 +223,7 @@ fun AppEnZona() {
     Scaffold(
         topBar = { EtiquetaDatosDePrueba() },
         bottomBar = {
-            if (mostrarBarra) {
+            if (mostrarBarra && barraAbajo) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                     destinos.forEach { destino ->
                         NavigationBarItem(
@@ -236,231 +245,266 @@ fun AppEnZona() {
             }
         }
     ) { relleno ->
-        NavHost(
-            navController = navController,
-            startDestination = rutaDeArranque,
-            modifier = Modifier.padding(relleno)
-        ) {
-            // ---------------- Acceso ----------------
-            composable(Rutas.LOGIN) {
-                LoginScreen(
-                    modoPersonal = false,
-                    onAutenticado = { irAInicioDeRol(navController) },
-                    onIrARegistro = { navController.navigate(Rutas.REGISTRO) },
-                    onCambiarModo = { navController.navigate(Rutas.LOGIN_PERSONAL) },
-                    onVerificarCuenta = { usuarioId -> navController.navigate(Rutas.otp(usuarioId)) },
-                    onOlvideContrasena = { navController.navigate(Rutas.RECUPERAR_CONTRASENA) },
-                )
+        Row(Modifier.padding(relleno)) {
+            if (mostrarBarra && !barraAbajo) {
+                BarraLateral(destinos, rutaActual) { ruta -> navegarATab(navController, ruta, rutaInicioDeRol()) }
             }
-            composable(Rutas.LOGIN_PERSONAL) {
-                LoginScreen(
-                    modoPersonal = true,
-                    onAutenticado = { irAInicioDeRol(navController) },
-                    onIrARegistro = {},
-                    onCambiarModo = { navController.popBackStack() },
-                    onOlvideContrasena = { navController.navigate(Rutas.RECUPERAR_CONTRASENA) },
-                )
-            }
-            composable(Rutas.RECUPERAR_CONTRASENA) {
-                RecuperarContrasenaScreen(
-                    onVolver = { navController.popBackStack() },
-                    // Con la contraseña nueva se vuelve al acceso con el que se empezó (asistentes o personal)
-                    onRestablecida = { navController.popBackStack() },
-                )
-            }
-            composable(Rutas.REGISTRO) {
-                RegisterScreen(
-                    onVolver = { navController.popBackStack() },
-                    onRegistrado = { usuarioId ->
-                        navController.navigate(Rutas.otp(usuarioId)) {
-                            popUpTo(Rutas.LOGIN)
+            NavHost(
+                navController = navController,
+                startDestination = rutaDeArranque,
+                modifier = Modifier.weight(1f),
+                enterTransition = Movimiento.entrar,
+                exitTransition = Movimiento.salir,
+                popEnterTransition = Movimiento.volverAEntrar,
+                popExitTransition = Movimiento.volverASalir,
+            ) {
+                // ---------------- Acceso ----------------
+                composable(Rutas.LOGIN) {
+                    LoginScreen(
+                        modoPersonal = false,
+                        onAutenticado = { irAInicioDeRol(navController) },
+                        onIrARegistro = { navController.navigate(Rutas.REGISTRO) },
+                        onCambiarModo = { navController.navigate(Rutas.LOGIN_PERSONAL) },
+                        onVerificarCuenta = { usuarioId -> navController.navigate(Rutas.otp(usuarioId)) },
+                        onOlvideContrasena = { navController.navigate(Rutas.RECUPERAR_CONTRASENA) },
+                    )
+                }
+                composable(Rutas.LOGIN_PERSONAL) {
+                    LoginScreen(
+                        modoPersonal = true,
+                        onAutenticado = { irAInicioDeRol(navController) },
+                        onIrARegistro = {},
+                        onCambiarModo = { navController.popBackStack() },
+                        onOlvideContrasena = { navController.navigate(Rutas.RECUPERAR_CONTRASENA) },
+                    )
+                }
+                composable(Rutas.RECUPERAR_CONTRASENA) {
+                    RecuperarContrasenaScreen(
+                        onVolver = { navController.popBackStack() },
+                        // Con la contraseña nueva se vuelve al acceso con el que se empezó (asistentes o personal)
+                        onRestablecida = { navController.popBackStack() },
+                    )
+                }
+                composable(Rutas.REGISTRO) {
+                    RegisterScreen(
+                        onVolver = { navController.popBackStack() },
+                        onRegistrado = { usuarioId ->
+                            navController.navigate(Rutas.otp(usuarioId)) {
+                                popUpTo(Rutas.LOGIN)
+                            }
+                        },
+                        // El aviso de privacidad se puede leer antes de aceptarlo (sin sesión)
+                        onVerPrivacidad = { navController.navigate(Rutas.PRIVACIDAD) },
+                    )
+                }
+                composable(Rutas.OTP) { entrada ->
+                    val usuarioId = entrada.arguments?.getString("usuarioId")?.toLongOrNull() ?: return@composable
+                    OtpScreen(
+                        usuarioId = usuarioId,
+                        onVerificado = {
+                            navController.navigate(Rutas.LOGIN) {
+                                popUpTo(Rutas.LOGIN) { inclusive = true }
+                            }
                         }
-                    },
-                    // El aviso de privacidad se puede leer antes de aceptarlo (sin sesión)
-                    onVerPrivacidad = { navController.navigate(Rutas.PRIVACIDAD) },
-                )
-            }
-            composable(Rutas.OTP) { entrada ->
-                val usuarioId = entrada.arguments?.getString("usuarioId")?.toLongOrNull() ?: return@composable
-                OtpScreen(
-                    usuarioId = usuarioId,
-                    onVerificado = {
-                        navController.navigate(Rutas.LOGIN) {
-                            popUpTo(Rutas.LOGIN) { inclusive = true }
+                    )
+                }
+
+                // ---------------- Asistente ----------------
+                composable(Rutas.HOME) {
+                    HomeScreen(
+                        onEventoClick = { id -> navController.navigate(Rutas.evento(id)) },
+                        onNotificaciones = { navController.navigate(Rutas.NOTIFICACIONES) },
+                    )
+                }
+                composable(Rutas.NOTIFICACIONES) {
+                    NotificacionesScreen(
+                        onVolver = { navController.popBackStack() },
+                        onAbrirBoleto = { id -> navController.navigate(Rutas.boleto(id)) },
+                        onAbrirEvento = { id -> navController.navigate(Rutas.evento(id)) },
+                    )
+                }
+                composable(Rutas.EVENTO) { entrada ->
+                    val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+                    EventDetailScreen(
+                        eventoId = id,
+                        onVolver = { navController.popBackStack() },
+                        onBoletoEmitido = { boletoId ->
+                            navController.navigate(Rutas.boleto(boletoId)) { popUpTo(Rutas.HOME) }
+                        },
+                        onElegirAsientos = { eventoId, tipoId, cantidad ->
+                            navController.navigate(Rutas.asientos(eventoId, tipoId, cantidad))
+                        },
+                        onIrAPago = { eventoId, tipoId, cantidad ->
+                            navController.navigate(Rutas.pago(eventoId, tipoId, cantidad, emptyList()))
+                        },
+                        onVerBoletos = { navegarATab(navController, Rutas.BOLETOS, rutaInicioDeRol()) },
+                    )
+                }
+                composable(Rutas.ASIENTOS) { entrada ->
+                    val eventoId = entrada.arguments?.getString("eventoId")?.toLongOrNull() ?: return@composable
+                    val tipoId = entrada.arguments?.getString("tipoId")?.toLongOrNull()
+                    val cantidad = entrada.arguments?.getString("cantidad")?.toIntOrNull() ?: 1
+                    SeatMapScreen(
+                        eventoId = eventoId,
+                        tipoBoletoId = tipoId?.takeIf { it != 0L },
+                        cantidad = cantidad,
+                        onVolver = { navController.popBackStack() },
+                        onBoletoEmitido = { boletoId ->
+                            navController.navigate(Rutas.boleto(boletoId)) { popUpTo(Rutas.HOME) }
+                        },
+                        onIrAPago = { evId, tpId, n, asientos ->
+                            navController.navigate(Rutas.pago(evId, tpId, n, asientos))
                         }
-                    }
-                )
-            }
-
-            // ---------------- Asistente ----------------
-            composable(Rutas.HOME) {
-                HomeScreen(
-                    onEventoClick = { id -> navController.navigate(Rutas.evento(id)) },
-                    onNotificaciones = { navController.navigate(Rutas.NOTIFICACIONES) },
-                )
-            }
-            composable(Rutas.NOTIFICACIONES) {
-                NotificacionesScreen(
-                    onVolver = { navController.popBackStack() },
-                    onAbrirBoleto = { id -> navController.navigate(Rutas.boleto(id)) },
-                    onAbrirEvento = { id -> navController.navigate(Rutas.evento(id)) },
-                )
-            }
-            composable(Rutas.EVENTO) { entrada ->
-                val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
-                EventDetailScreen(
-                    eventoId = id,
-                    onVolver = { navController.popBackStack() },
-                    onBoletoEmitido = { boletoId ->
-                        navController.navigate(Rutas.boleto(boletoId)) { popUpTo(Rutas.HOME) }
-                    },
-                    onElegirAsientos = { eventoId, tipoId, cantidad ->
-                        navController.navigate(Rutas.asientos(eventoId, tipoId, cantidad))
-                    },
-                    onIrAPago = { eventoId, tipoId, cantidad ->
-                        navController.navigate(Rutas.pago(eventoId, tipoId, cantidad, emptyList()))
-                    },
-                    onVerBoletos = { navegarATab(navController, Rutas.BOLETOS, rutaInicioDeRol()) },
-                )
-            }
-            composable(Rutas.ASIENTOS) { entrada ->
-                val eventoId = entrada.arguments?.getString("eventoId")?.toLongOrNull() ?: return@composable
-                val tipoId = entrada.arguments?.getString("tipoId")?.toLongOrNull()
-                val cantidad = entrada.arguments?.getString("cantidad")?.toIntOrNull() ?: 1
-                SeatMapScreen(
-                    eventoId = eventoId,
-                    tipoBoletoId = tipoId?.takeIf { it != 0L },
-                    cantidad = cantidad,
-                    onVolver = { navController.popBackStack() },
-                    onBoletoEmitido = { boletoId ->
-                        navController.navigate(Rutas.boleto(boletoId)) { popUpTo(Rutas.HOME) }
-                    },
-                    onIrAPago = { evId, tpId, n, asientos ->
-                        navController.navigate(Rutas.pago(evId, tpId, n, asientos))
-                    }
-                )
-            }
-            composable(Rutas.PAGO) { entrada ->
-                val eventoId = entrada.arguments?.getString("eventoId")?.toLongOrNull() ?: return@composable
-                val tipoId = entrada.arguments?.getString("tipoId")?.toLongOrNull()
-                val cantidad = entrada.arguments?.getString("cantidad")?.toIntOrNull() ?: 1
-                val asientos = entrada.arguments?.getString("asientos").orEmpty()
-                    .split("-").mapNotNull { it.toLongOrNull() }.filter { it != 0L }
-                CheckoutScreen(
-                    eventoId = eventoId,
-                    tipoBoletoId = tipoId?.takeIf { it != 0L },
-                    cantidad = cantidad,
-                    asientosIds = asientos,
-                    onVolver = { navController.popBackStack() },
-                    onIrAMetodos = { navController.navigate(Rutas.METODOS_PAGO) },
-                    onCompraRealizada = { compra ->
-                        // Un boleto: directo al QR. Varios: resumen con "Boleto k de N"
-                        val destino = if (compra.boletos.size == 1) Rutas.boleto(compra.boletos.first().id)
-                        else Rutas.orden(compra.orden.id)
-                        navController.navigate(destino) { popUpTo(Rutas.HOME) }
-                    }
-                )
-            }
-            composable(Rutas.ORDEN) { entrada ->
-                val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
-                OrderSummaryScreen(
-                    ordenId = id,
-                    onVerBoleto = { boletoId -> navController.navigate(Rutas.boleto(boletoId)) },
-                    onVerMisBoletos = { navegarATab(navController, Rutas.BOLETOS, rutaInicioDeRol()) },
-                    onVolverAInicio = { navegarATab(navController, Rutas.HOME, rutaInicioDeRol()) },
-                )
-            }
-            composable(Rutas.BOLETOS) {
-                TicketsScreen(
-                    onBoletoClick = { id -> navController.navigate(Rutas.boleto(id)) },
-                    onExplorar = { navegarATab(navController, Rutas.HOME, rutaInicioDeRol()) },
-                )
-            }
-            composable(Rutas.BOLETO) { entrada ->
-                val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
-                TicketDetailScreen(
-                    boletoId = id,
-                    onVolver = { navController.popBackStack() },
-                    onAbrirBoleto = { otroId ->
-                        navController.navigate(Rutas.boleto(otroId)) { popUpTo(Rutas.BOLETO) { inclusive = true } }
-                    },
-                )
-            }
-
-            // ---------------- Organizador ----------------
-            composable(Rutas.ORG_HOME) {
-                OrganizerHomeScreen(
-                    onNuevoEvento = { navController.navigate(Rutas.ORG_NUEVO) },
-                    onEventoClick = { id -> navController.navigate(Rutas.orgStats(id)) }
-                )
-            }
-            composable(Rutas.ORG_NUEVO) {
-                EventFormScreen(
-                    eventoId = null,
-                    onVolver = { navController.popBackStack() },
-                    onGuardado = { navController.popBackStack() }
-                )
-            }
-            composable(Rutas.ORG_EDITAR) { entrada ->
-                val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
-                EventFormScreen(
-                    eventoId = id,
-                    onVolver = { navController.popBackStack() },
-                    onGuardado = { navController.popBackStack() }
-                )
-            }
-            composable(Rutas.ORG_STATS) { entrada ->
-                val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
-                EventStatsScreen(
-                    eventoId = id,
-                    onVolver = { navController.popBackStack() },
-                    onEditar = { eventoId -> navController.navigate(Rutas.orgEditar(eventoId)) }
-                )
-            }
-
-            // ---------------- Validador y administración ----------------
-            composable(Rutas.VALIDADOR) { ScannerScreen() }
-            composable(Rutas.ADMIN) { AdminScreen() }
-
-            // ---------------- Común ----------------
-            composable(Rutas.PERFIL) {
-                ProfileScreen(
-                    onEditarPerfil = { navController.navigate(Rutas.EDITAR_PERFIL) },
-                    onMetodosPago = { navController.navigate(Rutas.METODOS_PAGO) },
-                    onSeguridad = { navController.navigate(Rutas.SEGURIDAD) },
-                    onAyuda = { navController.navigate(Rutas.AYUDA) },
-                    onPrivacidad = { navController.navigate(Rutas.PRIVACIDAD) },
-                    onLegal = { navController.navigate(Rutas.LEGAL) },
-                    onCerrarSesion = {
-                        navController.navigate(Rutas.LOGIN) {
-                            popUpTo(0) { inclusive = true }
+                    )
+                }
+                composable(Rutas.PAGO) { entrada ->
+                    val eventoId = entrada.arguments?.getString("eventoId")?.toLongOrNull() ?: return@composable
+                    val tipoId = entrada.arguments?.getString("tipoId")?.toLongOrNull()
+                    val cantidad = entrada.arguments?.getString("cantidad")?.toIntOrNull() ?: 1
+                    val asientos = entrada.arguments?.getString("asientos").orEmpty()
+                        .split("-").mapNotNull { it.toLongOrNull() }.filter { it != 0L }
+                    CheckoutScreen(
+                        eventoId = eventoId,
+                        tipoBoletoId = tipoId?.takeIf { it != 0L },
+                        cantidad = cantidad,
+                        asientosIds = asientos,
+                        onVolver = { navController.popBackStack() },
+                        onIrAMetodos = { navController.navigate(Rutas.METODOS_PAGO) },
+                        onCompraRealizada = { compra ->
+                            // Un boleto: directo al QR. Varios: resumen con "Boleto k de N"
+                            val destino = if (compra.boletos.size == 1) Rutas.boleto(compra.boletos.first().id)
+                            else Rutas.orden(compra.orden.id)
+                            navController.navigate(destino) { popUpTo(Rutas.HOME) }
                         }
-                    },
-                    // Al adquirir o dejar el rol de organizador la barra se rearma; si se pierde el
-                    // rol activo, la sesión vuelve al acceso normal y a Inicio
-                    onRolCambiado = {
-                        navController.navigate(rutaInicioDeRol()) { popUpTo(0) { inclusive = true } }
-                    },
-                )
+                    )
+                }
+                composable(Rutas.ORDEN) { entrada ->
+                    val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+                    OrderSummaryScreen(
+                        ordenId = id,
+                        onVerBoleto = { boletoId -> navController.navigate(Rutas.boleto(boletoId)) },
+                        onVerMisBoletos = { navegarATab(navController, Rutas.BOLETOS, rutaInicioDeRol()) },
+                        onVolverAInicio = { navegarATab(navController, Rutas.HOME, rutaInicioDeRol()) },
+                    )
+                }
+                composable(Rutas.BOLETOS) {
+                    TicketsScreen(
+                        onBoletoClick = { id -> navController.navigate(Rutas.boleto(id)) },
+                        onExplorar = { navegarATab(navController, Rutas.HOME, rutaInicioDeRol()) },
+                    )
+                }
+                composable(Rutas.BOLETO) { entrada ->
+                    val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+                    TicketDetailScreen(
+                        boletoId = id,
+                        onVolver = { navController.popBackStack() },
+                        onAbrirBoleto = { otroId ->
+                            navController.navigate(Rutas.boleto(otroId)) { popUpTo(Rutas.BOLETO) { inclusive = true } }
+                        },
+                    )
+                }
+
+                // ---------------- Organizador ----------------
+                composable(Rutas.ORG_HOME) {
+                    OrganizerHomeScreen(
+                        onNuevoEvento = { navController.navigate(Rutas.ORG_NUEVO) },
+                        onEventoClick = { id -> navController.navigate(Rutas.orgStats(id)) }
+                    )
+                }
+                composable(Rutas.ORG_NUEVO) {
+                    EventFormScreen(
+                        eventoId = null,
+                        onVolver = { navController.popBackStack() },
+                        onGuardado = { navController.popBackStack() }
+                    )
+                }
+                composable(Rutas.ORG_EDITAR) { entrada ->
+                    val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+                    EventFormScreen(
+                        eventoId = id,
+                        onVolver = { navController.popBackStack() },
+                        onGuardado = { navController.popBackStack() }
+                    )
+                }
+                composable(Rutas.ORG_STATS) { entrada ->
+                    val id = entrada.arguments?.getString("id")?.toLongOrNull() ?: return@composable
+                    EventStatsScreen(
+                        eventoId = id,
+                        onVolver = { navController.popBackStack() },
+                        onEditar = { eventoId -> navController.navigate(Rutas.orgEditar(eventoId)) }
+                    )
+                }
+
+                // ---------------- Validador y administración ----------------
+                composable(Rutas.VALIDADOR) { ScannerScreen() }
+                composable(Rutas.ADMIN) { AdminScreen() }
+
+                // ---------------- Común ----------------
+                composable(Rutas.PERFIL) {
+                    ProfileScreen(
+                        onEditarPerfil = { navController.navigate(Rutas.EDITAR_PERFIL) },
+                        onMetodosPago = { navController.navigate(Rutas.METODOS_PAGO) },
+                        onSeguridad = { navController.navigate(Rutas.SEGURIDAD) },
+                        onAyuda = { navController.navigate(Rutas.AYUDA) },
+                        onPrivacidad = { navController.navigate(Rutas.PRIVACIDAD) },
+                        onLegal = { navController.navigate(Rutas.LEGAL) },
+                        onCerrarSesion = {
+                            navController.navigate(Rutas.LOGIN) {
+                                popUpTo(0) { inclusive = true }
+                            }
+                        },
+                        // Al adquirir o dejar el rol de organizador la barra se rearma; si se pierde el
+                        // rol activo, la sesión vuelve al acceso normal y a Inicio
+                        onRolCambiado = {
+                            navController.navigate(rutaInicioDeRol()) { popUpTo(0) { inclusive = true } }
+                        },
+                    )
+                }
+                composable(Rutas.EDITAR_PERFIL) {
+                    EditProfileScreen(onVolver = { navController.popBackStack() })
+                }
+                composable(Rutas.METODOS_PAGO) {
+                    PaymentMethodsScreen(onVolver = { navController.popBackStack() })
+                }
+                composable(Rutas.SEGURIDAD) {
+                    SecurityScreen(onVolver = { navController.popBackStack() })
+                }
+                composable(Rutas.AYUDA) {
+                    HelpScreen(onVolver = { navController.popBackStack() })
+                }
+                composable(Rutas.PRIVACIDAD) {
+                    PrivacyScreen(onVolver = { navController.popBackStack() })
+                }
+                composable(Rutas.LEGAL) {
+                    LegalScreen(onVolver = { navController.popBackStack() })
+                }
             }
-            composable(Rutas.EDITAR_PERFIL) {
-                EditProfileScreen(onVolver = { navController.popBackStack() })
-            }
-            composable(Rutas.METODOS_PAGO) {
-                PaymentMethodsScreen(onVolver = { navController.popBackStack() })
-            }
-            composable(Rutas.SEGURIDAD) {
-                SecurityScreen(onVolver = { navController.popBackStack() })
-            }
-            composable(Rutas.AYUDA) {
-                HelpScreen(onVolver = { navController.popBackStack() })
-            }
-            composable(Rutas.PRIVACIDAD) {
-                PrivacyScreen(onVolver = { navController.popBackStack() })
-            }
-            composable(Rutas.LEGAL) {
-                LegalScreen(onVolver = { navController.popBackStack() })
-            }
+        }
+    }
+}
+
+/** Misma navegación que la barra inferior, en vertical, para tabletas y pantallas anchas. */
+@Composable
+private fun BarraLateral(destinos: List<DestinoBarra>, rutaActual: String?, onDestino: (String) -> Unit) {
+    NavigationRail(
+        modifier = Modifier.fillMaxHeight(),
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        destinos.forEach { destino ->
+            NavigationRailItem(
+                modifier = Modifier.objetivoDeGuia("nav_" + destino.ruta),
+                selected = rutaActual == destino.ruta,
+                onClick = { onDestino(destino.ruta) },
+                icon = { Icon(destino.icono, contentDescription = destino.etiqueta) },
+                label = { Text(destino.etiqueta) },
+                colors = NavigationRailItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.onPrimary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    indicatorColor = MaterialTheme.colorScheme.primary,
+                ),
+            )
         }
     }
 }

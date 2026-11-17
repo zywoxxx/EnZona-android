@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -276,6 +277,7 @@ fun SeatMapScreen(
             modifier = Modifier
                 .padding(relleno)
                 .fillMaxSize()
+                .contenidoLegible()
                 .verticalScroll(rememberScrollState())
         ) {
             Column(Modifier.padding(horizontal = Espacio.margen)) {

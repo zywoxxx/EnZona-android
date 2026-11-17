@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.Legible
+import com.uv.enzona.ui.components.aparicion
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -11,10 +13,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -53,7 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import com.uv.enzona.data.Guias
 import com.uv.enzona.ui.components.GuiaDePantalla
 import com.uv.enzona.ui.components.PasoGuia
@@ -119,7 +124,7 @@ private val filtrosSaver = Saver<FiltrosEventos, List<String>>(
 fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {}) {
     var filtros by rememberSaveable(stateSaver = filtrosSaver) { mutableStateOf(FiltrosEventos()) }
     var cambiandoZona by rememberSaveable { mutableStateOf(false) }
-    val estadoLista = rememberLazyListState()
+    val estadoLista = rememberLazyGridState()
 
     val zona = Preferencias.ciudad.value
     val ciudadZona = zona.substringBefore(",").trim()
@@ -200,16 +205,20 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
         ),
     )
 
-    LazyColumn(
+    // En un teléfono es una columna; en tabletas caben dos o tres tarjetas por fila
+    val todaLaFila: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(Legible.tarjetaMinima),
         state = estadoLista,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = Espacio.margen, end = Espacio.margen, top = Espacio.m, bottom = Espacio.xl),
         verticalArrangement = Arrangement.spacedBy(Espacio.m),
+        horizontalArrangement = Arrangement.spacedBy(Espacio.m),
     ) {
-        item(key = "encabezado") {
+        item(key = "encabezado", span = todaLaFila) {
             Encabezado(zona = zona, onCambiarZona = { cambiandoZona = true }, noLeidas = noLeidas, onNotificaciones = onNotificaciones, mostrarNotificaciones = conNotificaciones)
         }
-        item(key = "busqueda") {
+        item(key = "busqueda", span = todaLaFila) {
             Box(Modifier.objetivoDeGuia("inicio_busqueda")) {
                 CampoBusqueda(
                     valor = filtros.busqueda,
@@ -217,7 +226,7 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
                 )
             }
         }
-        item(key = "filtros") {
+        item(key = "filtros", span = todaLaFila) {
             Box(Modifier.objetivoDeGuia("inicio_filtros")) {
                 FilaFiltros(
                     filtros = filtros,
@@ -231,13 +240,13 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
             }
         }
         if (avisoUbicacion != null) {
-            item(key = "avisoUbicacion") { Aviso(texto = avisoUbicacion!!, tono = Tono.Neutro) }
+            item(key = "avisoUbicacion", span = todaLaFila) { Aviso(texto = avisoUbicacion!!, tono = Tono.Neutro) }
         }
         when (val estado = carga.estado) {
-            is Carga.Cargando -> item(key = "cargando") {
+            is Carga.Cargando -> item(key = "cargando", span = todaLaFila) {
                 IndicadorCarga("Buscando eventos…", Modifier.padding(vertical = Espacio.xl))
             }
-            is Carga.Fallo -> item(key = "fallo") {
+            is Carga.Fallo -> item(key = "fallo", span = todaLaFila) {
                 EstadoVacio(
                     icono = if (estado.sinConexion) Icons.Filled.CloudOff else Icons.Filled.ErrorOutline,
                     titulo = if (estado.sinConexion) "Sin conexión con el servidor" else "No se pudieron cargar los eventos",
@@ -248,8 +257,8 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
             }
             is Carga.Lista -> Unit
         }
-        if (carga.estado !is Carga.Lista) return@LazyColumn
-        item(key = "resumen") {
+        if (carga.estado !is Carga.Lista) return@LazyVerticalGrid
+        item(key = "resumen", span = todaLaFila) {
             ResumenFiltros(
                 total = eventos.size,
                 filtros = filtros,
@@ -262,11 +271,13 @@ fun HomeScreen(onEventoClick: (Long) -> Unit, onNotificaciones: () -> Unit = {})
             TarjetaEvento(
                 evento = evento,
                 onClick = { onEventoClick(evento.id) },
-                modifier = if (indice == 0) Modifier.objetivoDeGuia("inicio_evento") else Modifier,
+                modifier = (if (indice == 0) Modifier.objetivoDeGuia("inicio_evento") else Modifier)
+                    .animateItem()
+                    .aparicion(indice),
             )
         }
         if (eventos.isEmpty()) {
-            item(key = "vacio") {
+            item(key = "vacio", span = todaLaFila) {
                 EstadoVacio(
                     icono = Icons.Filled.SearchOff,
                     titulo = if (publicados.isEmpty()) "No hay eventos publicados en $ciudadZona" else "Nada coincide con tu búsqueda",

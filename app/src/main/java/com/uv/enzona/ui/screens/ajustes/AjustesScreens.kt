@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens.ajustes
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -83,6 +84,7 @@ private fun PantallaAjuste(
             modifier = Modifier
                 .padding(relleno)
                 .fillMaxSize()
+                .contenidoLegible()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp)
         ) {

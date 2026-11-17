@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.components
 
+import androidx.compose.runtime.remember
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -51,7 +53,14 @@ fun TarjetaEnZona(
         contentColor = MaterialTheme.colorScheme.onSurface,
     )
     if (onClick != null) {
-        Card(onClick = onClick, modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.large, colors = colores) {
+        val interaccion = remember { MutableInteractionSource() }
+        Card(
+            onClick = onClick,
+            interactionSource = interaccion,
+            modifier = modifier.fillMaxWidth().escalaAlPresionar(interaccion, escala = 0.985f),
+            shape = MaterialTheme.shapes.large,
+            colors = colores,
+        ) {
             Column(Modifier.padding(relleno), content = contenido)
         }
     } else {

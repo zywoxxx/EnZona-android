@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import android.app.Activity
 import android.content.Intent
 import androidx.compose.foundation.Canvas
@@ -157,6 +158,7 @@ fun TicketDetailScreen(boletoId: Long, onVolver: () -> Unit, onAbrirBoleto: ((Lo
             modifier = Modifier
                 .padding(relleno)
                 .fillMaxSize()
+                .contenidoLegible()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Espacio.margen),
             horizontalAlignment = Alignment.CenterHorizontally,

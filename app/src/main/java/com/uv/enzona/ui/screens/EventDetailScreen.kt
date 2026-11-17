@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.anchoPantalla
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -218,31 +220,12 @@ fun EventDetailScreen(
             modifier = Modifier
                 .padding(relleno)
                 .fillMaxSize()
+                .contenidoLegible()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Espacio.margen),
             verticalArrangement = Arrangement.spacedBy(Espacio.l),
         ) {
-            PortadaEvento(
-                nombre = evento.nombre,
-                categoria = evento.categoria,
-                fecha = evento.fecha,
-                imagenUrl = evento.imagenUrl,
-                mostrarFecha = false,
-            )
-
-            Column(verticalArrangement = Arrangement.spacedBy(Espacio.s)) {
-                Text(
-                    evento.nombre,
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(Espacio.s), verticalAlignment = Alignment.CenterVertically) {
-                    Etiqueta(evento.categoria)
-                    if (!evento.esDePago) Etiqueta("Gratis", tono = Tono.Destacado)
-                    if (evento.requiereAsiento) Etiqueta("Asientos numerados", tono = Tono.Marca, icono = Icons.Filled.EventSeat)
-                    if (evento.agotado && !cancelado) EtiquetaAgotado()
-                }
-            }
+            CabeceraEvento(evento = evento, cancelado = cancelado, amplia = anchoPantalla().esAmplia)
 
             when {
                 cancelado -> Aviso(
@@ -475,7 +458,7 @@ fun BarraAccion(
     aviso: (@Composable () -> Unit)? = null,
 ) {
     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 0.dp, shadowElevation = 8.dp) {
-        Column(Modifier.padding(horizontal = Espacio.margen, vertical = Espacio.m)) {
+        Column(Modifier.fillMaxWidth().contenidoLegible().padding(horizontal = Espacio.margen, vertical = Espacio.m)) {
             if (aviso != null) {
                 aviso()
                 Spacer(Modifier.height(Espacio.m))
@@ -489,6 +472,46 @@ fun BarraAccion(
                 )
             }
             BotonEnZona(texto = textoBoton, onClick = onClick, habilitado = habilitado, cargando = cargando, destacado = destacado)
+        }
+    }
+}
+
+/**
+ * Portada, nombre y etiquetas. En pantallas anchas la portada y el nombre van
+ * lado a lado: así la imagen no ocupa media pantalla antes de leer de qué trata.
+ */
+@Composable
+private fun CabeceraEvento(evento: Evento, cancelado: Boolean, amplia: Boolean) {
+    if (amplia) {
+        Row(horizontalArrangement = Arrangement.spacedBy(Espacio.l), verticalAlignment = Alignment.CenterVertically) {
+            PortadaEvento(
+                nombre = evento.nombre, categoria = evento.categoria, fecha = evento.fecha,
+                imagenUrl = evento.imagenUrl, mostrarFecha = false, modifier = Modifier.weight(1f),
+            )
+            TituloYEtiquetas(evento, cancelado, Modifier.weight(1f))
+        }
+    } else {
+        PortadaEvento(
+            nombre = evento.nombre, categoria = evento.categoria, fecha = evento.fecha,
+            imagenUrl = evento.imagenUrl, mostrarFecha = false,
+        )
+        TituloYEtiquetas(evento, cancelado)
+    }
+}
+
+@Composable
+private fun TituloYEtiquetas(evento: Evento, cancelado: Boolean, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(Espacio.s)) {
+        Text(
+            evento.nombre,
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(Espacio.s), verticalAlignment = Alignment.CenterVertically) {
+            Etiqueta(evento.categoria)
+            if (!evento.esDePago) Etiqueta("Gratis", tono = Tono.Destacado)
+            if (evento.requiereAsiento) Etiqueta("Asientos numerados", tono = Tono.Marca, icono = Icons.Filled.EventSeat)
+            if (evento.agotado && !cancelado) EtiquetaAgotado()
         }
     }
 }

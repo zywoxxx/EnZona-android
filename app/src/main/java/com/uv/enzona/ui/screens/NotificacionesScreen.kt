@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -98,7 +99,8 @@ fun NotificacionesScreen(
         LazyColumn(
             modifier = Modifier
                 .padding(relleno)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .contenidoLegible(),
             contentPadding = PaddingValues(start = Espacio.margen, end = Espacio.margen, top = Espacio.s, bottom = Espacio.xl),
             verticalArrangement = Arrangement.spacedBy(Espacio.m),
         ) {

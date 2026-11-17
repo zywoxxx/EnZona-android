@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -93,7 +94,8 @@ fun OrderSummaryScreen(
         LazyColumn(
             modifier = Modifier
                 .padding(relleno)
-                .fillMaxSize(),
+                .fillMaxSize()
+                .contenidoLegible(),
             contentPadding = PaddingValues(horizontal = Espacio.margen, vertical = Espacio.s),
             verticalArrangement = Arrangement.spacedBy(Espacio.m),
         ) {

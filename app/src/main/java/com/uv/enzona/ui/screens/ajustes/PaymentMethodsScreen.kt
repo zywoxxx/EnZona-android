@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.screens.ajustes
 
+import com.uv.enzona.ui.theme.Legible
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -93,6 +95,7 @@ fun PaymentMethodsScreen(onVolver: () -> Unit) {
             modifier = Modifier
                 .padding(relleno)
                 .fillMaxSize()
+                .contenidoLegible(Legible.formulario)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp)
         ) {

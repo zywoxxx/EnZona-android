@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.screens.organizer
 
+import com.uv.enzona.ui.theme.Legible
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -295,6 +297,7 @@ private fun Formulario(eventoId: Long?, datos: DatosFormulario, onVolver: () -> 
             modifier = Modifier
                 .padding(relleno)
                 .fillMaxSize()
+                .contenidoLegible(Legible.formulario)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = Espacio.margen),
             verticalArrangement = Arrangement.spacedBy(Espacio.m),

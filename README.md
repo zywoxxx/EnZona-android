@@ -237,6 +237,27 @@ Endpoints: `POST /api/auth/contrasena/recuperacion` y
 `POST /api/auth/contrasena/restablecimiento` (reglas en
 `ui/screens/auth/RecuperacionContrasena.kt`).
 
+## Tabletas, pantallas anchas y animaciones
+
+La app se adapta al ancho disponible sin dependencias nuevas
+(`ui/theme/Pantalla.kt`, cortes de Material 3: 600 y 840 dp):
+
+- **Barra lateral** (`NavigationRail`) en lugar de la barra inferior cuando la
+  pantalla es mediana o expandida, para no robar alto a las listas.
+- **Cuadrículas adaptables** en Inicio y Mis boletos: una columna en el
+  teléfono, dos en una tableta en vertical y tres en horizontal
+  (`LazyVerticalGrid` con tarjetas de 320 dp mínimo).
+- **Ancho legible:** formularios a 560 dp y pantallas de lectura a 760 dp,
+  centrados (`Modifier.contenidoLegible`); la portada del evento va al lado del
+  nombre en pantallas anchas y la barra de acción inferior respeta el mismo ancho.
+
+Animaciones compartidas en `ui/components/Animaciones.kt`, todas de 180 a
+320 ms: transición entre pantallas (fundido con deslizamiento corto, inverso al
+volver), entrada escalonada de las tarjetas (las primeras ocho), reacomodo
+animado al filtrar (`animateItem`) y respuesta táctil de botones y tarjetas
+(se encogen un 2 o 3 % al presionarlos). Las reglas puras se prueban en
+`PantallaAdaptableTest`.
+
 ## Cuentas de prueba
 
 Contraseña para todas: **enzona123**

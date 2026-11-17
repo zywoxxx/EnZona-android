@@ -1,5 +1,7 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.Legible
+import com.uv.enzona.ui.components.aparicion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -12,8 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ConfirmationNumber
 import androidx.compose.material.icons.filled.QrCode2
@@ -62,17 +67,20 @@ fun TicketsScreen(onBoletoClick: (Long) -> Unit, onExplorar: (() -> Unit)? = nul
         return (hermanos.indexOfFirst { it.id == detalle.id } + 1) to hermanos.size
     }
 
-    LazyColumn(
+    val todaLaFila: LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(Legible.tarjetaMinima),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = Espacio.margen, end = Espacio.margen, top = Espacio.m, bottom = Espacio.xl),
         verticalArrangement = Arrangement.spacedBy(Espacio.m),
+        horizontalArrangement = Arrangement.spacedBy(Espacio.m),
     ) {
-        item(key = "titulo") {
+        item(key = "titulo", span = todaLaFila) {
             Text("Mis boletos", style = MaterialTheme.typography.headlineMedium, color = MaterialTheme.colorScheme.onBackground)
         }
         when (val estado = carga.estado) {
-            is Carga.Cargando -> item(key = "cargando") { IndicadorCarga("Cargando tus boletos…", Modifier.padding(vertical = Espacio.xl)) }
-            is Carga.Fallo -> item(key = "fallo") {
+            is Carga.Cargando -> item(key = "cargando", span = todaLaFila) { IndicadorCarga("Cargando tus boletos…", Modifier.padding(vertical = Espacio.xl)) }
+            is Carga.Fallo -> item(key = "fallo", span = todaLaFila) {
                 EstadoVacio(
                     icono = Icons.Filled.ConfirmationNumber,
                     titulo = if (estado.sinConexion) "Sin conexión con el servidor" else "No se pudieron cargar tus boletos",
@@ -84,7 +92,7 @@ fun TicketsScreen(onBoletoClick: (Long) -> Unit, onExplorar: (() -> Unit)? = nul
             is Carga.Lista -> Unit
         }
         if (carga.estado is Carga.Lista && boletos.isEmpty()) {
-            item(key = "vacio") {
+            item(key = "vacio", span = todaLaFila) {
                 EstadoVacio(
                     icono = Icons.Filled.ConfirmationNumber,
                     titulo = "Aún no tienes boletos",
@@ -95,12 +103,16 @@ fun TicketsScreen(onBoletoClick: (Long) -> Unit, onExplorar: (() -> Unit)? = nul
             }
         }
         if (vigentes.isNotEmpty()) {
-            item(key = "sub_vigentes") { Subtitulo("Vigentes", vigentes.size) }
-            items(vigentes, key = { it.id }) { TarjetaBoleto(it, posicionEnOrden(it)) { onBoletoClick(it.id) } }
+            item(key = "sub_vigentes", span = todaLaFila) { Subtitulo("Vigentes", vigentes.size) }
+            itemsIndexed(vigentes, key = { _, boleto -> boleto.id }) { indice, boleto ->
+                TarjetaBoleto(boleto, posicionEnOrden(boleto), Modifier.animateItem().aparicion(indice)) { onBoletoClick(boleto.id) }
+            }
         }
         if (anteriores.isNotEmpty()) {
-            item(key = "sub_anteriores") { Subtitulo("Anteriores", anteriores.size) }
-            items(anteriores, key = { "ant_${it.id}" }) { TarjetaBoleto(it, posicionEnOrden(it)) { onBoletoClick(it.id) } }
+            item(key = "sub_anteriores", span = todaLaFila) { Subtitulo("Anteriores", anteriores.size) }
+            itemsIndexed(anteriores, key = { _, boleto -> "ant_${boleto.id}" }) { indice, boleto ->
+                TarjetaBoleto(boleto, posicionEnOrden(boleto), Modifier.animateItem().aparicion(indice)) { onBoletoClick(boleto.id) }
+            }
         }
     }
 }
@@ -118,9 +130,14 @@ private fun Subtitulo(texto: String, cantidad: Int) {
 
 /** Fila de boleto: bloque de fecha, datos y estado. */
 @Composable
-fun TarjetaBoleto(detalle: BoletoDetalle, posicion: Pair<Int, Int>? = null, onClick: () -> Unit) {
+fun TarjetaBoleto(
+    detalle: BoletoDetalle,
+    posicion: Pair<Int, Int>? = null,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     val vigente = detalle.estado == EstadoBoleto.VALIDO
-    TarjetaEnZona(onClick = onClick, relleno = PaddingValues(Espacio.m)) {
+    TarjetaEnZona(modifier = modifier, onClick = onClick, relleno = PaddingValues(Espacio.m)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             BloqueFechaBoleto(detalle.evento.fecha, atenuado = !vigente)
             Spacer(Modifier.width(Espacio.m))

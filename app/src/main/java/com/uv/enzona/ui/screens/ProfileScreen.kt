@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -142,6 +143,7 @@ fun ProfileScreen(
             .padding(rellenoScaffold)
             .fillMaxSize()
             .background(MoradoFondo)
+            .contenidoLegible()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
     ) {

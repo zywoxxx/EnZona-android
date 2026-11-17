@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens.organizer
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -152,6 +153,7 @@ fun EventStatsScreen(
             modifier = Modifier
                 .padding(relleno)
                 .fillMaxSize()
+                .contenidoLegible()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 18.dp)
         ) {

@@ -1,5 +1,6 @@
 package com.uv.enzona.ui.screens.admin
 
+import com.uv.enzona.ui.theme.contenidoLegible
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -63,7 +64,7 @@ fun PestanaEstadisticas() {
     val carga = rememberCarga { Repositorio.actual.estadisticasAdmin() }
     ContenidoCarga(carga, textoCargando = "Calculando estadísticas…") { e ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().contenidoLegible(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
