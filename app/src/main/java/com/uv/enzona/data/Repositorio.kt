@@ -81,16 +81,35 @@ object Repositorio {
     /**
      * Detección automática al arrancar: la persona no configura nada. Se prueban a
      * la vez la dirección compilada, la PC por cable USB y el emulador, y se usa la
-     * primera que responde. Si ninguna responde se queda la compilada (la pantalla
-     * de arranque mostrará «Sin conexión»). No aplica con datos de prueba ni cuando
-     * se fijó una dirección a mano.
+     * primera que responde. Con una dirección fijada a mano solo se sondea esa.
+     * Devuelve false si ninguna respondió (con datos de prueba siempre true).
      */
-    suspend fun elegirServidorDisponible() {
-        val ctx = contexto ?: return
-        if (urlPorDefecto.isBlank() || urlGuardada(ctx) != null) return
-        val candidatos = listOf(urlPorDefecto, URL_USB, URL_EMULADOR).distinct()
-        val disponible = primeroQueResponde(candidatos, sonda) ?: return
-        if (disponible.trimEnd('/') != urlBase) conectar(disponible)
+    suspend fun elegirServidorDisponible(): Boolean {
+        val ctx = contexto ?: return true
+        if (urlPorDefecto.isBlank()) return true
+        val disponible = primeroQueResponde(candidatos(ctx), sonda) ?: return false
+        usar(disponible)
+        return true
+    }
+
+    /**
+     * Segunda oportunidad cuando nadie respondió: el alojamiento gratuito de la API
+     * la apaga sin tráfico y tarda 2 a 3 minutos en volver. Se insiste hasta
+     * [ESPERA_DESPERTAR_MS] avisando a `alEsperar` cuánto se lleva. false si se agotó.
+     */
+    suspend fun esperarServidor(alEsperar: (Long) -> Unit): Boolean {
+        val ctx = contexto ?: return true
+        if (urlPorDefecto.isBlank()) return true
+        val disponible = esperarAQueResponda(candidatos(ctx), sonda, alEsperar = alEsperar) ?: return false
+        usar(disponible)
+        return true
+    }
+
+    private fun candidatos(ctx: Context): List<String> =
+        urlGuardada(ctx)?.let { listOf(it) } ?: listOf(urlPorDefecto, URL_USB, URL_EMULADOR).distinct()
+
+    private fun usar(url: String) {
+        if (url.trimEnd('/') != urlBase) conectar(url)
     }
 
     private const val ARCHIVO_CONFIG = "enzona_config"

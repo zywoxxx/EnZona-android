@@ -4,6 +4,14 @@ import com.uv.enzona.data.URL_EMULADOR
 import com.uv.enzona.data.URL_USB
 import com.uv.enzona.data.normalizarUrlServidor
 import com.uv.enzona.data.primeroQueResponde
+import com.uv.enzona.data.AVISO_CASI_MS
+import com.uv.enzona.data.AVISO_DESPERTANDO_MS
+import com.uv.enzona.data.ESPERA_DESPERTAR_MS
+import com.uv.enzona.data.MENSAJE_CASI
+import com.uv.enzona.data.MENSAJE_CONECTANDO
+import com.uv.enzona.data.MENSAJE_DESPERTANDO
+import com.uv.enzona.data.esperarAQueResponda
+import com.uv.enzona.data.mensajeDeEspera
 import com.uv.enzona.ui.components.ContadorDeToques
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -94,5 +102,44 @@ class ServidorTest {
         assertNull(normalizarUrlServidor("10.0.0.1 :8080"))
         assertNull(normalizarUrlServidor("http://"))
         assertNull(normalizarUrlServidor("http://host:puerto"))
+    }
+
+    // ---- espera a un servidor que está despertando ----
+
+    @Test
+    fun `se insiste hasta que el servidor responde y se avisa cuanto se lleva esperando`() = runBlocking {
+        var reloj = 0L
+        var intentos = 0
+        val avisos = mutableListOf<Long>()
+        val url = esperarAQueResponda(
+            candidatos = listOf("https://api/"),
+            sonda = { intentos++; intentos >= 3 },          // responde al tercer intento
+            limiteMs = 240_000L, pausaMs = 5_000L,
+            ahora = { reloj }, pausar = { reloj += it }, alEsperar = { avisos += it },
+        )
+        assertEquals("https://api/", url)
+        assertEquals(3, intentos)
+        assertEquals(listOf(0L, 5_000L), avisos)
+    }
+
+    @Test
+    fun `si se agota el tiempo se devuelve null sin esperar mas de la cuenta`() = runBlocking {
+        var reloj = 0L
+        var intentos = 0
+        val url = esperarAQueResponda(
+            candidatos = listOf("https://api/"), sonda = { intentos++; false },
+            limiteMs = 20_000L, pausaMs = 5_000L, ahora = { reloj }, pausar = { reloj += it },
+        )
+        assertNull(url)
+        assertEquals(5, intentos)              // 0, 5, 10, 15 y 20 s
+        assertTrue(ESPERA_DESPERTAR_MS >= 180_000L)   // Render gratuito tarda 2 a 3 minutos
+    }
+
+    @Test
+    fun `el mensaje de la pantalla de conexion explica la espera por etapas`() {
+        assertEquals(MENSAJE_CONECTANDO, mensajeDeEspera(0))
+        assertEquals(MENSAJE_CONECTANDO, mensajeDeEspera(AVISO_DESPERTANDO_MS - 1))
+        assertEquals(MENSAJE_DESPERTANDO, mensajeDeEspera(AVISO_DESPERTANDO_MS))
+        assertEquals(MENSAJE_CASI, mensajeDeEspera(AVISO_CASI_MS))
     }
 }

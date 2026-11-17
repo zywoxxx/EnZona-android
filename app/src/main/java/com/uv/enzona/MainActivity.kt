@@ -1,5 +1,7 @@
 package com.uv.enzona
 
+import com.uv.enzona.data.mensajeDeEspera
+import com.uv.enzona.data.MENSAJE_CONECTANDO
 import com.uv.enzona.ui.theme.anchoPantalla
 import com.uv.enzona.ui.components.Movimiento
 import androidx.compose.material3.NavigationRailItemDefaults
@@ -166,13 +168,23 @@ fun AppEnZona() {
     var arranque by remember { mutableStateOf<Carga<Unit>>(Carga.Cargando) }
     var intento by remember { mutableStateOf(0) }
     var mostrarServidor by remember { mutableStateOf(false) }
+    // Texto de la pantalla de conexión: cambia si el servidor tarda en despertar
+    var mensajeConexion by remember { mutableStateOf(MENSAJE_CONECTANDO) }
     // Cambiar de servidor (Repositorio.generacion) vuelve a conectar desde cero
     LaunchedEffect(intento, Repositorio.generacion) {
         arranque = Carga.Cargando
+        mensajeConexion = MENSAJE_CONECTANDO
         val inicio = System.currentTimeMillis()
         val resultado = try {
             // Sin configuración: se usa la dirección del API que responda (compilada, USB o emulador)
-            Repositorio.elegirServidorDisponible()
+            var hayServidor = Repositorio.elegirServidorDisponible()
+            if (!hayServidor) {
+                // El alojamiento gratuito apaga la API sin tráfico: se le dan unos minutos para despertar
+                hayServidor = Repositorio.esperarServidor { transcurrido -> mensajeConexion = mensajeDeEspera(transcurrido) }
+            }
+            if (!hayServidor) {
+                throw ErrorEnZona(0, "SIN_CONEXION", "No se pudo conectar con el servidor. Revisa tu conexión e inténtalo de nuevo.")
+            }
             val repositorio = Repositorio.actual
             repositorio.restaurarSesion()?.let { usuario ->
                 SessionManager.iniciarSesion(usuario, comoPersonal = repositorio.sesionDePersonal() && usuario.esPersonal)
@@ -187,7 +199,7 @@ fun AppEnZona() {
     }
     when (val a = arranque) {
         is Carga.Cargando -> {
-            PantallaConectando()
+            PantallaConectando(texto = mensajeConexion)
             return
         }
         is Carga.Fallo -> {

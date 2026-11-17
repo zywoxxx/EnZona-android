@@ -2,6 +2,7 @@ package com.uv.enzona.data
 
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -37,6 +38,53 @@ suspend fun primeroQueResponde(candidatos: List<String>, sonda: suspend (String)
         val respuestas = candidatos.map { url -> async { runCatching { sonda(url) }.getOrDefault(false) } }.awaitAll()
         candidatos.zip(respuestas).firstOrNull { (_, responde) -> responde }?.first
     }
+
+/** Cuánto se insiste con un servidor que no responde: Render gratuito tarda 2 a 3 minutos en despertar. */
+const val ESPERA_DESPERTAR_MS = 240_000L
+
+/** Pausa entre un sondeo fallido y el siguiente mientras se espera al servidor. */
+const val PAUSA_ENTRE_SONDEOS_MS = 5_000L
+
+/**
+ * Insiste hasta que alguna dirección responda o se agote `limiteMs`. Devuelve la dirección que
+ * respondió o `null`. `alEsperar` recibe los milisegundos transcurridos tras cada intento fallido
+ * (para avisar en pantalla); `ahora` y `pausar` se inyectan para probarlo sin esperar de verdad.
+ */
+suspend fun esperarAQueResponda(
+    candidatos: List<String>,
+    sonda: suspend (String) -> Boolean,
+    limiteMs: Long = ESPERA_DESPERTAR_MS,
+    pausaMs: Long = PAUSA_ENTRE_SONDEOS_MS,
+    ahora: () -> Long = System::currentTimeMillis,
+    pausar: suspend (Long) -> Unit = { delay(it) },
+    alEsperar: (Long) -> Unit = {},
+): String? {
+    val inicio = ahora()
+    while (true) {
+        primeroQueResponde(candidatos, sonda)?.let { return it }
+        val transcurrido = ahora() - inicio
+        if (transcurrido >= limiteMs) return null
+        alEsperar(transcurrido)
+        pausar(pausaMs)
+    }
+}
+
+/** A partir de cuántos ms de espera se explica que el servidor está arrancando. */
+const val AVISO_DESPERTANDO_MS = 15_000L
+
+/** A partir de cuántos ms se tranquiliza: sigue en ello, falta poco. */
+const val AVISO_CASI_MS = 120_000L
+
+const val MENSAJE_CONECTANDO = "Conectando con EnZona…"
+const val MENSAJE_DESPERTANDO = "El servidor está despertando. Suele tardar un par de minutos; gracias por esperar."
+const val MENSAJE_CASI = "Ya casi… el servidor sigue arrancando. No cierres la app."
+
+/** Qué decir en la pantalla de conexión según cuánto se lleva esperando. */
+fun mensajeDeEspera(transcurridoMs: Long): String = when {
+    transcurridoMs >= AVISO_CASI_MS -> MENSAJE_CASI
+    transcurridoMs >= AVISO_DESPERTANDO_MS -> MENSAJE_DESPERTANDO
+    else -> MENSAJE_CONECTANDO
+}
 
 /** Sondeo real: `GET {url}actuator/health` debe contestar 200 con el estado UP. */
 fun sondaHttp(cliente: OkHttpClient = clienteDeSondeo()): suspend (String) -> Boolean = { url ->
