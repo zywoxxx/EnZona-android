@@ -152,8 +152,10 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/** Rutas que se pueden ver sin sesión. */
-private val RUTAS_DE_ACCESO = setOf(Rutas.LOGIN, Rutas.LOGIN_PERSONAL, Rutas.REGISTRO, Rutas.OTP, Rutas.PRIVACIDAD)
+/** Rutas que se pueden ver sin sesión; cualquier otra regresa al acceso cuando no hay sesión. */
+internal val RUTAS_DE_ACCESO = setOf(
+    Rutas.LOGIN, Rutas.LOGIN_PERSONAL, Rutas.REGISTRO, Rutas.OTP, Rutas.PRIVACIDAD, Rutas.RECUPERAR_CONTRASENA,
+)
 
 /** Tiempo mínimo de la pantalla de conexión: el logo alcanza a armarse completo (ver [TiemposConexion]). */
 private const val DURACION_MINIMA_CONEXION_MS = TiemposConexion.TEXTO_FIN + 250

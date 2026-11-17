@@ -22,6 +22,13 @@ class RecuperacionContrasenaTest {
     private val repositorio = RepositorioMock
 
     @Test
+    fun `la pantalla de recuperacion se puede abrir sin sesion`() {
+        // Si no está en esta lista, la app regresa al acceso antes de mostrarla
+        assertTrue(Rutas.RECUPERAR_CONTRASENA in RUTAS_DE_ACCESO)
+        assertTrue(Rutas.REGISTRO in RUTAS_DE_ACCESO)
+    }
+
+    @Test
     fun `el correo debe estar bien formado antes de pedir el codigo`() {
         assertNull(RecuperacionContrasena.errorDeCorreo("asistente@uv.mx"))
         assertEquals(RecuperacionContrasena.MENSAJE_CORREO, RecuperacionContrasena.errorDeCorreo("asistente"))
